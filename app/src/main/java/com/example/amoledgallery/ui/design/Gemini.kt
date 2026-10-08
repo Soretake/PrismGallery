@@ -245,7 +245,7 @@ fun Modifier.geminiGlow(
     val midPx = if (vivid) hgt * 0.42f else (hgt * 0.13f).coerceIn(5.dp.toPx(), 16.dp.toPx())
     val edgePx = if (vivid) hgt * 0.92f else (hgt * 0.5f).coerceIn(14.dp.toPx(), 50.dp.toPx())
     val layerAlpha = if (vivid) 0.036f else 0.055f
-    val shade = Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.22f), 0.55f to Color.Transparent)
+    val shade = Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.10f), 0.5f to Color.Transparent)
     val sheen = Brush.verticalGradient(0f to Color.White.copy(alpha = 0.22f), 1f to Color.White.copy(alpha = 0.06f))
     val samples = 32
     // The tall vivid glow needs finer steps, or its layered edge shows as bands.
@@ -352,13 +352,13 @@ fun Modifier.geminiGlass(
 }
 
 /**
- * Tint of the floating pills (tab bar, selection bar, viewer actions): nearly clear, so the blurred content
- * behind keeps its colour instead of turning milky grey.
+ * Tint of the floating pills (tab bar, selection bar, viewer actions): practically clear, like Gemini's answer
+ * card - the content behind stays visible and only the glow and rim mark the surface.
  */
-const val GEMINI_PILL_TINT = 0.14f
+const val GEMINI_PILL_TINT = 0.05f
 
-/** The pills' blur: strong enough that busy content behind them turns into soft colour. */
-val GeminiPillBlur = 24.dp
+/** The pills' blur: just enough distortion to set the surface apart, not a frost. */
+val GeminiPillBlur = 5.dp
 
 /**
  * Gemini's quiet controls (the round buttons and the title chip): a dark grey fill, or white with a hairline
