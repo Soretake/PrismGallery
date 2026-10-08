@@ -553,9 +553,10 @@ private fun IosIconSquare(icon: ImageVector) {
 
 /** "843,5 MB" / "62,42 GB" in the app language. */
 internal fun formatStorageSize(bytes: Long): String {
-    val kb = bytes / 1024.0
-    val mb = kb / 1024.0
-    val gb = mb / 1024.0
+    // Decimal units, as Android's own storage settings and the rest of the app count.
+    val kb = bytes / 1000.0
+    val mb = kb / 1000.0
+    val gb = mb / 1000.0
     val locale = LanguageState.locale
     return when {
         gb >= 1.0 -> String.format(locale, "%.2f GB", gb)

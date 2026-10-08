@@ -109,7 +109,8 @@ fun DuplicatesScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = statusBarTop + 72.dp,
+                        // Material's top bar fades out over the first 28dp below it: start the content under that.
+                        top = statusBarTop + if (theme.language == com.example.amoledgallery.ui.theme.DesignLanguage.GOOGLE_EXPRESSIVE) 96.dp else 72.dp,
                         bottom = navigationBottom + if (selectedCount > 0) 132.dp else 32.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(20.dp)

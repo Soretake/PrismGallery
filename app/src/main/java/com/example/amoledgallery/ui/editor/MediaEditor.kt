@@ -14,6 +14,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.exifinterface.media.ExifInterface
 import androidx.media3.common.Effect
 import androidx.media3.effect.Crop
 import androidx.media3.effect.ScaleAndRotateTransformation
@@ -25,6 +26,7 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import com.example.amoledgallery.model.MediaItem
+import com.example.amoledgallery.ui.components.openWithLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -155,6 +157,7 @@ object MediaEditor {
             context.contentResolver.openOutputStream(uri)?.use { stream ->
                 if (!result.compress(format, 95, stream)) error("compress failed")
             } ?: error("no output stream")
+            copyExif(context, item, uri, result.width, result.height)
             publish(context, uri)
         } catch (e: Exception) {
             context.contentResolver.delete(uri, null, null)
@@ -259,6 +262,37 @@ object MediaEditor {
         }.getOrNull()
         return fromRow?.takeIf { it.isNotBlank() && it != MediaStore.VOLUME_EXTERNAL }
             ?: MediaStore.VOLUME_EXTERNAL_PRIMARY
+    }
+
+    /** Original details the edited copy keeps, so it stays next to the original in the timeline and on the map. */
+    private val COPIED_EXIF_TAGS = arrayOf(
+        ExifInterface.TAG_DATETIME, ExifInterface.TAG_DATETIME_ORIGINAL, ExifInterface.TAG_DATETIME_DIGITIZED,
+        ExifInterface.TAG_OFFSET_TIME, ExifInterface.TAG_OFFSET_TIME_ORIGINAL, ExifInterface.TAG_OFFSET_TIME_DIGITIZED,
+        ExifInterface.TAG_SUBSEC_TIME, ExifInterface.TAG_SUBSEC_TIME_ORIGINAL, ExifInterface.TAG_SUBSEC_TIME_DIGITIZED,
+        ExifInterface.TAG_GPS_VERSION_ID, ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF,
+        ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF, ExifInterface.TAG_GPS_ALTITUDE,
+        ExifInterface.TAG_GPS_ALTITUDE_REF, ExifInterface.TAG_GPS_TIMESTAMP, ExifInterface.TAG_GPS_DATESTAMP,
+        ExifInterface.TAG_MAKE, ExifInterface.TAG_MODEL, ExifInterface.TAG_F_NUMBER, ExifInterface.TAG_EXPOSURE_TIME,
+        ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_FOCAL_LENGTH,
+        ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, ExifInterface.TAG_FLASH, ExifInterface.TAG_WHITE_BALANCE
+    )
+
+    /**
+     * Writes the original's date, location and camera details into the edited copy. The pixels are already
+     * upright, so the orientation is reset. Best effort: a copy without them is still a valid edit.
+     */
+    private fun copyExif(context: Context, item: MediaItem, target: Uri, width: Int, height: Int) {
+        runCatching {
+            val source = openWithLocation(context, item.uri)?.use { ExifInterface(it) } ?: return
+            context.contentResolver.openFileDescriptor(target, "rw")?.use { pfd ->
+                val exif = ExifInterface(pfd.fileDescriptor)
+                for (tag in COPIED_EXIF_TAGS) source.getAttribute(tag)?.let { exif.setAttribute(tag, it) }
+                exif.setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+                exif.setAttribute(ExifInterface.TAG_PIXEL_X_DIMENSION, width.toString())
+                exif.setAttribute(ExifInterface.TAG_PIXEL_Y_DIMENSION, height.toString())
+                exif.saveAttributes()
+            }
+        }
     }
 
     private fun editedName(item: MediaItem, extension: String): String {

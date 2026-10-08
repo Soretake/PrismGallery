@@ -23,11 +23,11 @@ android {
         applicationId = "com.prismgallery.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.1"
+        versionCode = 5
+        versionName = "1.2"
         // True while this version is still in testing; set to false for the published release. The
         // About page shows it (and whether this is a debug build) next to the version.
-        buildConfigField("boolean", "PRERELEASE", "false")
+        buildConfigField("boolean", "PRERELEASE", "true")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

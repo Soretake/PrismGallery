@@ -229,7 +229,12 @@ fun Modifier.geminiGlow(
     colors: List<Color>,
     pulse: GeminiPulse,
     points: FloatArray,
-    strength: Float = 1f
+    strength: Float = 1f,
+    /**
+     * Gemini's answer card: the colour fills the lower part and climbs the sides, the top is shaded a little and
+     * a soft light rim runs all the way round.
+     */
+    vivid: Boolean = false
 ): Modifier = drawWithCache {
     val outline = shape.createOutline(size, layoutDirection, this)
     val clip = Path().apply { addOutline(outline) }
@@ -237,10 +242,14 @@ fun Modifier.geminiGlow(
     val w = size.width
     val hgt = size.height
     // Low on small bars, a little higher on large cards; the edges always rise clearly above the middle.
-    val midPx = (hgt * 0.13f).coerceIn(5.dp.toPx(), 16.dp.toPx())
-    val edgePx = (hgt * 0.5f).coerceIn(14.dp.toPx(), 50.dp.toPx())
+    val midPx = if (vivid) hgt * 0.42f else (hgt * 0.13f).coerceIn(5.dp.toPx(), 16.dp.toPx())
+    val edgePx = if (vivid) hgt * 0.92f else (hgt * 0.5f).coerceIn(14.dp.toPx(), 50.dp.toPx())
+    val layerAlpha = if (vivid) 0.036f else 0.055f
+    val shade = Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.22f), 0.55f to Color.Transparent)
+    val sheen = Brush.verticalGradient(0f to Color.White.copy(alpha = 0.22f), 1f to Color.White.copy(alpha = 0.06f))
     val samples = 32
-    val layers = 14
+    // The tall vivid glow needs finer steps, or its layered edge shows as bands.
+    val layers = if (vivid) 28 else 14
     val rim = Stroke(width = 1.dp.toPx() * 2f)
     val fade = Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Transparent, 1f to Color.Black)
     val band = Path()
@@ -264,6 +273,7 @@ fun Modifier.geminiGlow(
         for (i in 0..samples) heights[i] = glowHeight(i / samples.toFloat(), points, pulse, midPx, edgePx)
         val lift = strength * (0.9f + 0.35f * e)
         clipPath(clip) {
+            if (vivid) drawRect(shade)
             // Stacked, shrinking copies of the band: strongest at the bottom, fading softly towards its top edge.
             for (layer in 1..layers) {
                 val s = layer / layers.toFloat()
@@ -272,13 +282,14 @@ fun Modifier.geminiGlow(
                 for (i in 0..samples) band.lineTo(w * i / samples, hgt - heights[i] * s)
                 band.lineTo(w, hgt)
                 band.close()
-                drawPath(band, gradient, alpha = (0.055f * lift).coerceIn(0f, 1f))
+                drawPath(band, gradient, alpha = (layerAlpha * lift).coerceIn(0f, 1f))
             }
         }
         drawIntoCanvas { it.saveLayer(bounds, Paint()) }
         drawOutline(outline, gradient, alpha = (0.4f * lift).coerceIn(0f, 1f), style = rim)
         drawRect(fade, blendMode = BlendMode.DstIn)
         drawIntoCanvas { it.restore() }
+        if (vivid) drawOutline(outline, sheen, style = Stroke(width = 1.dp.toPx()))
         drawContent()
     }
 }
@@ -292,7 +303,10 @@ fun Modifier.geminiGlass(
     shape: Shape,
     state: HazeState? = LocalContentHaze.current,
     tintAlpha: Float = 0.55f,
-    glow: Float = 1f
+    glow: Float = 1f,
+    blur: Dp = 26.dp,
+    /** The floating pills' look: clear glass with the colour glowing up from below (see [geminiGlow]). */
+    vivid: Boolean = false
 ): Modifier {
     val palette = LocalAppTheme.current.palette
     val light = palette.isLight
@@ -317,7 +331,7 @@ fun Modifier.geminiGlass(
             GlassSpec(
                 tint = base.copy(alpha = if (light) (tintAlpha + 0.25f).coerceAtMost(0.92f) else tintAlpha),
                 fallback = base.copy(alpha = if (light) 0.96f else (tintAlpha + 0.25f).coerceAtMost(0.94f)),
-                blur = 26.dp,
+                blur = blur,
                 rim = GlassRim.None
             ),
             state
@@ -334,8 +348,17 @@ fun Modifier.geminiGlass(
                 }
             }
         }
-        .geminiGlow(shape, colors, pulse, points, if (light) glow * 0.7f else glow)
+        .geminiGlow(shape, colors, pulse, points, if (light) glow * 0.7f else glow, vivid)
 }
+
+/**
+ * Tint of the floating pills (tab bar, selection bar, viewer actions): nearly clear, so the blurred content
+ * behind keeps its colour instead of turning milky grey.
+ */
+const val GEMINI_PILL_TINT = 0.14f
+
+/** The pills' blur: strong enough that busy content behind them turns into soft colour. */
+val GeminiPillBlur = 24.dp
 
 /**
  * Gemini's quiet controls (the round buttons and the title chip): a dark grey fill, or white with a hairline

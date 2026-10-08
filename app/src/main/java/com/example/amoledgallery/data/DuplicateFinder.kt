@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 
-/** Files that are byte for byte the same, newest kept first. */
+/** Files that are byte for byte the same, the one offered to be kept first. */
 @Immutable
 data class DuplicateGroup(
     val items: List<MediaItem>,
@@ -114,7 +114,7 @@ class DuplicateFinder(private val context: Context) {
             for (sameHead in byHead.values) {
                 if (sameHead.size < 2) continue
                 if (sameHead.first().size <= HEAD_BYTES) {
-                    val ordered = sameHead.sortedByDescending { it.date }
+                    val ordered = keeperFirst(sameHead)
                     groups += DuplicateGroup(ordered, ordered.first().size * (ordered.size - 1))
                     continue
                 }
@@ -130,8 +130,7 @@ class DuplicateFinder(private val context: Context) {
                 }
                 for (identical in byFull.values) {
                     if (identical.size < 2) continue
-                    // Newest first: the copy at the top is the one offered to be kept.
-                    val ordered = identical.sortedByDescending { it.date }
+                    val ordered = keeperFirst(identical)
                     groups += DuplicateGroup(ordered, ordered.first().size * (ordered.size - 1))
                 }
             }
@@ -144,6 +143,17 @@ class DuplicateFinder(private val context: Context) {
         }
         groups.sortedByDescending { it.wastedBytes }
     }
+
+    /**
+     * The order a set is shown in; the first one is offered to be kept. Names that look like a copy
+     * ("photo_copy", "photo (1)", "Kopie von ...") go last, then the newest wins, then the shorter name.
+     */
+    private fun keeperFirst(items: List<MediaItem>): List<MediaItem> =
+        items.sortedWith(
+            compareBy<MediaItem> { COPY_NAME.containsMatchIn(it.displayName.substringBeforeLast('.')) }
+                .thenByDescending { it.date }
+                .thenBy { it.displayName.length }
+        )
 
     /** SHA-256 of at most [limit] bytes of the file, or null when it cannot be read. */
     private fun hashOf(item: MediaItem, limit: Long): String? = runCatching {
@@ -165,5 +175,8 @@ class DuplicateFinder(private val context: Context) {
 
     private companion object {
         const val HEAD_BYTES = 256L * 1024
+
+        /** File names (without extension) that mark a duplicate made by copying, in English and German. */
+        val COPY_NAME = Regex("""(?i)(copy|kopie)|\(\d+\)\s*$""")
     }
 }

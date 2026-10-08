@@ -319,7 +319,7 @@ fun BottomNavigationBar(
                         scaleX = barScale
                         scaleY = barScale
                     }
-                    .geminiGlass(pill, tintAlpha = 0.62f)
+                    .geminiGlass(pill, tintAlpha = com.example.amoledgallery.ui.design.GEMINI_PILL_TINT, blur = com.example.amoledgallery.ui.design.GeminiPillBlur, vivid = true)
                     .then(holdSlideModifier)
                     .padding(horizontal = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -380,7 +380,7 @@ fun BottomNavigationBar(
                     .then(reportCenter(2))
                     .pressScale(menuInteraction, 0.92f)
                     .size(70.dp)
-                    .geminiGlass(CircleShape, tintAlpha = 0.62f)
+                    .geminiGlass(CircleShape, tintAlpha = com.example.amoledgallery.ui.design.GEMINI_PILL_TINT, blur = com.example.amoledgallery.ui.design.GeminiPillBlur, vivid = true)
                     .clickable(interactionSource = menuInteraction, indication = ripple(color = palette.onBackground)) {
                         onTabSelected(menuTab.tab)
                     },
@@ -684,7 +684,7 @@ fun SelectionActionBar(
             Row(
                 modifier = Modifier
                     .height(72.dp)
-                    .geminiGlass(RoundedCornerShape(percent = 50), tintAlpha = 0.62f)
+                    .geminiGlass(RoundedCornerShape(percent = 50), tintAlpha = com.example.amoledgallery.ui.design.GEMINI_PILL_TINT, blur = com.example.amoledgallery.ui.design.GeminiPillBlur, vivid = true)
                     .padding(horizontal = 14.dp, vertical = 4.dp)
             ) {
                 LabeledAction(Icons.Outlined.Share, strings.share, enabled, palette.onBackground, Modifier.width(88.dp), onShare)

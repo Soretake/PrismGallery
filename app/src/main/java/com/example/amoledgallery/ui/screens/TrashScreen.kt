@@ -84,7 +84,12 @@ fun TrashScreen(
                     contentPadding = PaddingValues(
                         start = theme.shapes.gridHorizontalPadding,
                         end = theme.shapes.gridHorizontalPadding,
-                        top = statusBarTop + if (compactActions) 112.dp else 64.dp,
+                        // Material's top bar fades out over the first 28dp below it: start the content under that.
+                        top = statusBarTop + when {
+                            compactActions && theme.language == DesignLanguage.GOOGLE_EXPRESSIVE -> 136.dp
+                            compactActions -> 112.dp
+                            else -> 64.dp
+                        },
                         bottom = navigationBottom + 24.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(theme.shapes.gridSpacing),

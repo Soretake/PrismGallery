@@ -813,7 +813,8 @@ internal fun graphicsQualityLabel(tier: PerformanceProfile): String = when (tier
 private fun graphicsQualityDescription(tier: PerformanceProfile): String = strings.qualityDescription(tier)
 
 private fun formatBytes(bytes: Long): String {
-    val gb = bytes / (1024.0 * 1024.0 * 1024.0)
+    // Decimal units, as Android's own storage settings and the rest of the app count.
+    val gb = bytes / 1_000_000_000.0
     // App language decides the decimal separator (1,5 GB / 1.5 GB), like every other text.
     return String.format(LanguageState.locale, "%.1f GB", gb)
 }

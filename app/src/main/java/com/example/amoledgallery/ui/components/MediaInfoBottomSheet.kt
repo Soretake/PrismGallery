@@ -121,7 +121,8 @@ data class MediaMetadata(
 private fun rememberMediaMetadata(item: MediaItem): MediaMetadata? {
     val context = LocalContext.current
     var metadata by remember(item.id) { mutableStateOf<MediaMetadata?>(null) }
-    LaunchedEffect(item.id, item.uri, LanguageState.language) {
+    // displayName too: a rename keeps the id and uri, and the open viewer must show the new name.
+    LaunchedEffect(item.id, item.uri, item.displayName, LanguageState.language) {
         // Let a page swipe settle first; the result is then applied on the main thread in one go.
         kotlinx.coroutines.delay(200)
         val loaded = withContext(Dispatchers.IO) { extractMediaMetadata(context, item) }
@@ -906,7 +907,7 @@ private fun MetadataRow(
  * create, unless the app holds ACCESS_MEDIA_LOCATION and asks MediaStore for the original. Without the permission, or
  * for files that are not in the media library ("Open with" from another app), the normal stream is used.
  */
-private fun openWithLocation(context: Context, uri: Uri): java.io.InputStream? {
+internal fun openWithLocation(context: Context, uri: Uri): java.io.InputStream? {
     if (uri.authority == MediaStore.AUTHORITY &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_MEDIA_LOCATION) == PackageManager.PERMISSION_GRANTED
     ) {
@@ -1118,9 +1119,10 @@ private fun extractMediaMetadata(context: Context, item: MediaItem): MediaMetada
 
 private fun formatFileSize(bytes: Long, decimal: DecimalFormat): String {
     if (bytes <= 0L) return ""
-    val kb = bytes / 1024.0
-    val mb = kb / 1024.0
-    val gb = mb / 1024.0
+    // Decimal units, as Android's own storage settings and the rest of the app count.
+    val kb = bytes / 1000.0
+    val mb = kb / 1000.0
+    val gb = mb / 1000.0
     return when {
         gb >= 1.0 -> "${decimal.format(gb)} GB"
         mb >= 1.0 -> "${decimal.format(mb)} MB"

@@ -1188,13 +1188,25 @@ fun ThemedTopBar(
                     val end = measurables[2].measure(loose)
                     val gap = 10.dp.roundToPx()
                     val side = maxOf(start.width, end.width)
-                    val titleWidth = (constraints.maxWidth - 2 * (side + if (side > 0) gap else 0)).coerceAtLeast(0)
+                    val centredWidth = (constraints.maxWidth - 2 * (side + if (side > 0) gap else 0)).coerceAtLeast(0)
+                    // A title that does not fit centred (a wide action group on one side only) may also use the
+                    // free space on the other side, and moves off-centre only as far as it has to.
+                    val left = start.width + if (start.width > 0) gap else 0
+                    val right = constraints.maxWidth - end.width - if (end.width > 0) gap else 0
+                    val titleWidth = if (measurables[1].maxIntrinsicWidth(constraints.maxHeight) > centredWidth) {
+                        (right - left).coerceAtLeast(0)
+                    } else {
+                        centredWidth
+                    }
                     val titlePlaceable = measurables[1].measure(loose.copy(maxWidth = titleWidth))
                     val height = constraints.maxHeight
                     layout(constraints.maxWidth, height) {
                         start.place(0, (height - start.height) / 2)
                         end.place(constraints.maxWidth - end.width, (height - end.height) / 2)
-                        titlePlaceable.place((constraints.maxWidth - titlePlaceable.width) / 2, (height - titlePlaceable.height) / 2)
+                        val titleX = ((constraints.maxWidth - titlePlaceable.width) / 2)
+                            .coerceAtMost(right - titlePlaceable.width)
+                            .coerceAtLeast(left)
+                        titlePlaceable.place(titleX, (height - titlePlaceable.height) / 2)
                     }
                 }
             } else {

@@ -500,7 +500,7 @@ object GermanStrings : AppStrings {
     override val showAlbums = "Alben anzeigen"
     override val showAll = "Alle"
     override fun freeSpace(size: String) = "$size frei"
-    override fun selectionSize(count: Int, size: String) = "$count Element(e) · $size"
+    override fun selectionSize(count: Int, size: String) = "${counted(count, "Element", "Elemente")} · $size"
     override val sdCard = "SD-Karte"
     override val internal = "Intern"
     override val noSdCard = "Keine SD-Karte eingelegt"
@@ -520,7 +520,7 @@ object GermanStrings : AppStrings {
     override val changeLocationTitle = "Speicherort ändern?"
     override fun moveSizeInfo(size: String, target: String, free: String) = "Größe: $size · Frei auf $target: $free"
     override fun migrateMessage(name: String, count: Int, toSdCard: Boolean) =
-        "„$name“ mit $count Element(en) wird auf ${if (toSdCard) "die SD-Karte" else "den internen Speicher"} verschoben. Die Dateien werden physisch verschoben und der Medienindex sofort aktualisiert."
+        "„$name“ mit ${counted(count, "Element", "Elementen")} wird auf ${if (toSdCard) "die SD-Karte" else "den internen Speicher"} verschoben. Die Dateien werden physisch verschoben und der Medienindex sofort aktualisiert."
     override fun subAlbumSuffix(count: Int) = " · $count Unteralben"
     override fun inAlbum(name: String, location: String) = "In „$name“ · $location"
     override val subAlbumName = "Name des Unteralbums"
@@ -557,12 +557,12 @@ object GermanStrings : AppStrings {
     override fun duplicateCopies(count: Int) = "$count× dieselbe Datei"
     override fun duplicateWastes(size: String) = "$size doppelt"
     override val duplicateKept = "Bleibt"
-    override fun deleteCopies(count: Int) = "$count Kopie(n) löschen"
+    override fun deleteCopies(count: Int) = "${counted(count, "Kopie", "Kopien")} löschen"
     override val deleteCopiesTitle = "Kopien löschen?"
     override fun deleteCopiesMessage(count: Int, size: String) =
-        "$count Kopie(n) wandern in den Papierkorb und geben $size frei. Von jeder Datei bleibt mindestens eine erhalten."
+        "${counted(count, "Kopie", "Kopien")} wandern in den Papierkorb und geben $size frei. Von jeder Datei bleibt mindestens eine erhalten."
     override fun deleteCopiesMessageAll(count: Int, sets: Int) =
-        "$count Kopie(n) wandern in den Papierkorb. Achtung: bei $sets Gruppe(n) ist jede Kopie ausgewählt – dort bleibt nichts übrig."
+        "${counted(count, "Kopie", "Kopien")} wandern in den Papierkorb. Achtung: bei ${counted(sets, "Gruppe", "Gruppen")} ist jede Kopie ausgewählt – dort bleibt nichts übrig."
     override fun duplicatesFrees(count: Int, size: String) = "$count ausgewählt · gibt $size frei"
     override val deletedItem = "Gelöschtes Element"
     override val itemFallback = "Medium"
@@ -697,14 +697,14 @@ object GermanStrings : AppStrings {
 
     override val favoriteAdded = "Zu Favoriten hinzugefügt"
     override val favoriteRemoved = "Aus Favoriten entfernt"
-    override fun movedToTrash(count: Int) = "$count Element(e) in Papierkorb verschoben"
+    override fun movedToTrash(count: Int) = "${counted(count, "Element", "Elemente")} in Papierkorb verschoben"
     override fun albumCreated(name: String, onSdCard: Boolean) =
         "Album '$name' ${if (onSdCard) "auf SD-Karte" else "im internen Speicher"} erstellt"
     override fun createError(message: String?) = "Fehler beim Erstellen: $message"
     override val noItemsSelected = "Keine Elemente ausgewählt"
     override val noItemsToMove = "Keine Elemente zum Verschieben gefunden"
     override fun moveStarted(albumName: String) = "Verschieben nach '$albumName' gestartet..."
-    override fun movedItems(count: Int, albumName: String) = "$count Element(e) erfolgreich nach '$albumName' verschoben"
+    override fun movedItems(count: Int, albumName: String) = "${counted(count, "Element", "Elemente")} erfolgreich nach '$albumName' verschoben"
     override fun albumHidden(name: String) = "Album '$name' ausgeblendet"
     override fun albumsHidden(count: Int) = "$count Alben ausgeblendet"
     override fun migratingAlbums(count: Int, toSdCard: Boolean) =
@@ -738,7 +738,7 @@ object GermanStrings : AppStrings {
         "Album '$name' erfolgreich auf ${if (toSdCard) "SD-Karte" else "internen Speicher"} verschoben"
     override fun migrationError(message: String?) = "Fehler bei Migration: $message"
     override fun migratedPartly(name: String, toSdCard: Boolean, moved: Int, failed: Int) =
-        "$moved Element(e) von '$name' auf ${if (toSdCard) "SD-Karte" else "internen Speicher"} verschoben, $failed konnten nicht verschoben werden und sind noch am alten Ort"
+        "${counted(moved, "Element", "Elemente")} von '$name' auf ${if (toSdCard) "SD-Karte" else "internen Speicher"} verschoben, $failed konnten nicht verschoben werden und sind noch am alten Ort"
     override fun notEnoughSpace(neededBytes: Long, freeBytes: Long) =
         "Nicht genug Platz: ${gigabytes(neededBytes)} nötig, ${gigabytes(freeBytes)} frei"
     override val movingMediaTitle = "Verschiebe Medien…"
@@ -852,7 +852,7 @@ object EnglishStrings : AppStrings {
     override val showAlbums = "Show albums"
     override val showAll = "All"
     override fun freeSpace(size: String) = "$size free"
-    override fun selectionSize(count: Int, size: String) = "$count item(s) · $size"
+    override fun selectionSize(count: Int, size: String) = "${counted(count, "item", "items")} · $size"
     override val sdCard = "SD card"
     override val internal = "Internal"
     override val noSdCard = "No SD card inserted"
@@ -872,7 +872,7 @@ object EnglishStrings : AppStrings {
     override val changeLocationTitle = "Change storage location?"
     override fun moveSizeInfo(size: String, target: String, free: String) = "Size: $size · Free on $target: $free"
     override fun migrateMessage(name: String, count: Int, toSdCard: Boolean) =
-        "“$name” with $count item(s) will be moved to ${if (toSdCard) "the SD card" else "internal storage"}. The files are physically moved and the media index is updated right away."
+        "“$name” with ${counted(count, "item", "items")} will be moved to ${if (toSdCard) "the SD card" else "internal storage"}. The files are physically moved and the media index is updated right away."
     override fun subAlbumSuffix(count: Int) = " · $count sub-albums"
     override fun inAlbum(name: String, location: String) = "In “$name” · $location"
     override val subAlbumName = "Sub-album name"
@@ -909,12 +909,12 @@ object EnglishStrings : AppStrings {
     override fun duplicateCopies(count: Int) = "$count× the same file"
     override fun duplicateWastes(size: String) = "$size doubled"
     override val duplicateKept = "Kept"
-    override fun deleteCopies(count: Int) = "Delete $count copy(s)"
+    override fun deleteCopies(count: Int) = "Delete ${counted(count, "copy", "copies")}"
     override val deleteCopiesTitle = "Delete copies?"
     override fun deleteCopiesMessage(count: Int, size: String) =
-        "$count copy(s) go to the trash and free $size. At least one of every file is kept."
+        "${counted(count, "copy", "copies")} go to the trash and free $size. At least one of every file is kept."
     override fun deleteCopiesMessageAll(count: Int, sets: Int) =
-        "$count copy(s) go to the trash. Careful: in $sets set(s) every copy is ticked, so nothing of those is left."
+        "${counted(count, "copy", "copies")} go to the trash. Careful: in ${counted(sets, "set", "sets")} every copy is ticked, so nothing of those is left."
     override fun duplicatesFrees(count: Int, size: String) = "$count selected · frees $size"
     override val deletedItem = "Deleted item"
     override val itemFallback = "Item"
@@ -1075,14 +1075,14 @@ object EnglishStrings : AppStrings {
 
     override val favoriteAdded = "Added to favorites"
     override val favoriteRemoved = "Removed from favorites"
-    override fun movedToTrash(count: Int) = "Moved $count item(s) to the trash"
+    override fun movedToTrash(count: Int) = "Moved ${counted(count, "item", "items")} to the trash"
     override fun albumCreated(name: String, onSdCard: Boolean) =
         "Album '$name' created ${if (onSdCard) "on the SD card" else "in internal storage"}"
     override fun createError(message: String?) = "Could not create: $message"
     override val noItemsSelected = "No items selected"
     override val noItemsToMove = "No items found to move"
     override fun moveStarted(albumName: String) = "Moving to '$albumName'..."
-    override fun movedItems(count: Int, albumName: String) = "Moved $count item(s) to '$albumName'"
+    override fun movedItems(count: Int, albumName: String) = "Moved ${counted(count, "item", "items")} to '$albumName'"
     override fun albumHidden(name: String) = "Album '$name' hidden"
     override fun albumsHidden(count: Int) = "$count albums hidden"
     override fun migratingAlbums(count: Int, toSdCard: Boolean) =
@@ -1116,7 +1116,7 @@ object EnglishStrings : AppStrings {
         "Album '$name' moved to ${if (toSdCard) "the SD card" else "internal storage"}"
     override fun migrationError(message: String?) = "Migration failed: $message"
     override fun migratedPartly(name: String, toSdCard: Boolean, moved: Int, failed: Int) =
-        "Moved $moved item(s) of '$name' to ${if (toSdCard) "the SD card" else "internal storage"}; $failed could not be moved and are still where they were"
+        "Moved ${counted(moved, "item", "items")} of '$name' to ${if (toSdCard) "the SD card" else "internal storage"}; $failed could not be moved and are still where they were"
     override fun notEnoughSpace(neededBytes: Long, freeBytes: Long) =
         "Not enough space: ${gigabytes(neededBytes)} needed, ${gigabytes(freeBytes)} free"
     override val movingMediaTitle = "Moving media…"
@@ -1131,6 +1131,9 @@ object EnglishStrings : AppStrings {
     override val folderCreateFailed = "The folder could not be created."
     override val subFolderCreateFailed = "The sub-folder could not be created."
 }
+
+/** "1 copy" / "3 copies": the count with the matching singular or plural noun. */
+private fun counted(count: Int, one: String, other: String) = "$count ${if (count == 1) one else other}"
 
 /** A size as "1.4 GB" (one decimal), for storage messages. */
 internal fun gigabytes(bytes: Long): String =

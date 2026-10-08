@@ -1380,7 +1380,7 @@ private fun DetailBottomBar(
             val pill = RoundedCornerShape(percent = 50)
             Row(
                 modifier = Modifier
-                    .geminiGlass(pill, hazeState, tintAlpha = 0.5f)
+                    .geminiGlass(pill, hazeState, tintAlpha = com.example.amoledgallery.ui.design.GEMINI_PILL_TINT, blur = com.example.amoledgallery.ui.design.GeminiPillBlur, vivid = true)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
