@@ -261,7 +261,10 @@ fun AddToGroupSheet(album: AlbumItem, onDismiss: () -> Unit) {
     var newName by remember { mutableStateOf("") }
     val accent = LocalAppTheme.current.palette.accent
     ThemedSheet(onDismissRequest = onDismiss, title = F.addToGroup) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             if (groups.isNotEmpty()) {
                 ThemedListSection(
                     inSheet = true,

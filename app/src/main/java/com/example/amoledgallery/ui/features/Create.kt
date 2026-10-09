@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -189,7 +190,8 @@ private fun CollageOptions(items: List<MediaItem>, onBack: () -> Unit) {
                 .padding(top = featureTopPadding(), bottom = featureBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
+            // Never taller than about half a landscape screen, so the options stay in view.
+            Box(modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(max = 360.dp).aspectRatio(1f, matchHeightConstraintsFirst = true), contentAlignment = Alignment.Center) {
                 preview?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
             }
             Text(F.layout, color = palette.textMuted, fontSize = 14.sp)
@@ -252,7 +254,7 @@ private fun GifOptions(items: List<MediaItem>, onBack: () -> Unit) {
                 .padding(top = featureTopPadding(), bottom = featureBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(aspect.coerceIn(0.5f, 2f)), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(max = 360.dp).aspectRatio(aspect.coerceIn(0.5f, 2f), matchHeightConstraintsFirst = true), contentAlignment = Alignment.Center) {
                 thumbs?.getOrNull(frame)?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
             }
             Text(F.frameDelay, color = palette.textMuted, fontSize = 14.sp)

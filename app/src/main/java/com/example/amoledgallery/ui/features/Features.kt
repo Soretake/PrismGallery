@@ -255,8 +255,10 @@ fun MediaSectionGrid(
     var openIndex by remember { mutableStateOf<Int?>(null) }
     var covered by remember { mutableStateOf(false) }
 
+    // More, smaller tiles on wide screens (landscape), about as large as in portrait.
+    val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+        columns = GridCells.Fixed(maxOf(columns, screenWidth / 110)),
         modifier = modifier.fillMaxSize().graphicsLayer { alpha = if (covered) 0f else 1f },
         contentPadding = PaddingValues(
             start = theme.shapes.gridHorizontalPadding,

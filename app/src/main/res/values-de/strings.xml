@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown by Android itself (wallpaper picker, widget list) in German. -->
+    <string name="live_wallpaper_description">Das Video oder GIF, das du in Prism Gallery ausgewählt hast</string>
+    <string name="slideshow_wallpaper_label">Prism Diashow</string>
+    <string name="slideshow_wallpaper_description">Fotos des in Prism Gallery gewählten Albums, die alle paar Minuten wechseln</string>
+    <string name="photo_widget_label">Prism Foto</string>
+    <string name="photo_widget_description">Ein Foto aus deinen Favoriten, das stündlich wechselt</string>
+</resources>

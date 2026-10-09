@@ -242,7 +242,10 @@ fun EditLocationDialog(item: MediaItem) {
     val towns = remember(query, ready) { if (ready) Geo.search(query, 8) else emptyList() }
     val close = { Features.closeDialog() }
     ThemedSheet(onDismissRequest = close, title = F.editLocation) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             ThemedListSection(
                 inSheet = true,
                 rows = listOf(
@@ -258,7 +261,7 @@ fun EditLocationDialog(item: MediaItem) {
             )
             ThemedTextField(value = query, onValueChange = { query = it }, placeholder = F.searchTown)
             if (towns.isNotEmpty()) {
-                Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                Column {
                     ThemedListSection(
                         inSheet = true,
                         rows = towns.map { town ->
@@ -318,7 +321,7 @@ fun ShareOptionsSheet(items: List<MediaItem>) {
         val accent = LocalAppTheme.current.palette.accent
         ThemedListSection(
             inSheet = true,
-            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp),
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp),
             rows = listOf(
                 ListRow(F.shareOriginal, icon = Icons.Outlined.Share, iconColor = accent, showChevron = false, onClick = { share(null) }),
                 ListRow(F.shareWithoutLocation, icon = Icons.Outlined.LocationOff, iconColor = accent, showChevron = false, onClick = { share(MediaOps.ShareMode.WITHOUT_LOCATION) }),
@@ -340,7 +343,7 @@ fun CopyToAlbumSheet(items: List<MediaItem>) {
     val close = { Features.closeDialog() }
     ThemedSheet(onDismissRequest = close, title = F.copyToAlbum) {
         val accent = LocalAppTheme.current.palette.accent
-        Column(modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             ThemedListSection(
                 inSheet = true,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp),

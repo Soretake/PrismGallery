@@ -32,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Schedule
@@ -119,6 +120,9 @@ fun OneUiMenuPopup(
             PopupAction(Icons.Outlined.FavoriteBorder, strings.favorites, onFavorites),
             PopupAction(Icons.Outlined.Schedule, strings.recent, onRecent),
             PopupAction(Icons.Outlined.Delete, strings.trash, onTrash),
+            PopupAction(Icons.Outlined.Build, com.example.amoledgallery.ui.i18n.F.tools) {
+                com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.Tools)
+            },
             PopupAction(Icons.Outlined.Settings, strings.settings, onSettings)
         )
         val light = palette.isLight

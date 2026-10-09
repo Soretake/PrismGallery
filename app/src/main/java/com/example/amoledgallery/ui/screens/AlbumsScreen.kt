@@ -1513,6 +1513,9 @@ fun AlbumsScreen(
             ) {
                 Column(
                     modifier = Modifier
+                        // Scrolls where the sheet is lower than its rows (landscape).
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 20.dp)
                 ) {
@@ -2315,9 +2318,6 @@ private fun AlbumTile(
             Column(modifier = Modifier.weight(1f)) {
                 Text(album.name, color = palette.onBackground, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(countText, color = palette.textMuted, fontSize = 13.sp, maxLines = 1)
-            }
-            if (album.isSdCard) {
-                Icon(Icons.Rounded.SdCard, null, tint = palette.textMuted, modifier = Modifier.size(18.dp))
             }
         }
         return
