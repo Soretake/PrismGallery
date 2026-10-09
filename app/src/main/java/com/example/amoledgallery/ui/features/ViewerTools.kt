@@ -76,6 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.viewModelScope
 import java.util.Calendar
 
 // ---------------------------------------------------------------------------------------------
@@ -290,7 +291,8 @@ fun EditLocationDialog(item: MediaItem) {
 @Composable
 fun ShareOptionsSheet(items: List<MediaItem>) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    // The gallery's scope: the sheet closes (and its own scope ends) before the copies are ready.
+    val scope = LocalFeatureEnv.current.vm.viewModelScope
     val close = { Features.closeDialog() }
     fun share(mode: MediaOps.ShareMode?) {
         close()

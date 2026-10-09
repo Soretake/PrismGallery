@@ -2,6 +2,7 @@ package com.example.amoledgallery.ui.features
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -307,24 +308,32 @@ fun MediaSectionGrid(
     FeatureViewer(all, openIndex, onClose = { openIndex = null }, onCoveringChange = { covered = it })
 }
 
-/** The fullscreen viewer for photos shown on a tool page. */
+/**
+ * The fullscreen viewer for photos shown on a tool page. It opens as an overlay over the whole window, so it
+ * covers the page whatever layout the grid sits in (the search field above it, for instance).
+ */
 @Composable
 fun FeatureViewer(items: List<MediaItem>, index: Int?, onClose: () -> Unit, onCoveringChange: (Boolean) -> Unit = {}) {
     val env = LocalFeatureEnv.current
     val favoriteIds by env.vm.favoriteIds.collectAsStateWithLifecycle()
     val holder = remember { IntArray(1) }
     index?.let { holder[0] = it }
-    if (index != null) BackHandler { onClose() }
-    MediaZoomTransition(visible = index != null && items.isNotEmpty(), onCoveringChange = onCoveringChange) {
-        MediaDetailScreen(
-            mediaList = items,
-            initialIndex = holder[0].coerceIn(0, (items.size - 1).coerceAtLeast(0)),
-            onBack = onClose,
-            onTrashItem = { env.vm.trashMedia(it) },
-            onRenameItem = { item, name -> env.vm.renameMedia(item, name) },
-            isFavorite = { it in favoriteIds },
-            onToggleFavorite = { env.vm.toggleFavorite(it) }
-        )
+    LaunchedEffect(index) { onCoveringChange(index != null) }
+    if (index == null || items.isEmpty()) return
+    com.example.amoledgallery.ui.design.OverlayWindow { transition ->
+        val alpha by transition.animateFloat(label = "feature_viewer") { if (it) 1f else 0f }
+        BackHandler { onClose() }
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }) {
+            MediaDetailScreen(
+                mediaList = items,
+                initialIndex = holder[0].coerceIn(0, (items.size - 1).coerceAtLeast(0)),
+                onBack = onClose,
+                onTrashItem = { env.vm.trashMedia(it) },
+                onRenameItem = { item, name -> env.vm.renameMedia(item, name) },
+                isFavorite = { it in favoriteIds },
+                onToggleFavorite = { env.vm.toggleFavorite(it) }
+            )
+        }
     }
 }
 

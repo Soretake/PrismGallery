@@ -129,8 +129,9 @@ internal fun MediaMetadata.locationText(): String {
 private fun rememberMediaMetadata(item: MediaItem): MediaMetadata? {
     val context = LocalContext.current
     var metadata by remember(item.id) { mutableStateOf<MediaMetadata?>(null) }
-    // displayName too: a rename keeps the id and uri, and the open viewer must show the new name.
-    LaunchedEffect(item.id, item.uri, item.displayName, LanguageState.language) {
+    // displayName and dateModified too: a rename or a new date / location keeps the id and uri, and the open
+    // viewer must show the change.
+    LaunchedEffect(item.id, item.uri, item.displayName, item.dateModified, LanguageState.language) {
         // Let a page swipe settle first; the result is then applied on the main thread in one go.
         kotlinx.coroutines.delay(200)
         val loaded = withContext(Dispatchers.IO) { extractMediaMetadata(context, item) }
