@@ -115,8 +115,37 @@ data class MediaMetadata(
     /** File format as a short label ("JPEG", "HEIC", "MP4"). */
     val formatLabel: String = "",
     /** "Samstag, 18. April 2026 um 12:10" */
-    val fullDate: String = ""
+    val fullDate: String = "",
+    /** "Ultra HDR" when Android finds a gain map in the photo (Android 14+), else null. */
+    val hdrLabel: String? = null
 )
+
+/**
+ * Whether Android decodes [item] with an HDR gain map (Ultra HDR / ISO 21496-1). Only files that name a gain
+ * map in their metadata are decoded, and then only as a small preview.
+ */
+private fun hasGainmap(context: Context, item: MediaItem): Boolean {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE || item.isVideo) return false
+    return runCatching {
+        val head = context.contentResolver.openInputStream(item.uri)?.use { input ->
+            val buffer = ByteArray(128 * 1024)
+            var read = 0
+            while (read < buffer.size) {
+                val n = input.read(buffer, read, buffer.size - read)
+                if (n <= 0) break
+                read += n
+            }
+            String(buffer, 0, read, Charsets.ISO_8859_1)
+        } ?: return false
+        if (!head.contains("hdrgm") && !head.contains("21496")) return false
+        val source = android.graphics.ImageDecoder.createSource(context.contentResolver, item.uri)
+        val bitmap = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.setTargetSampleSize(maxOf(1, maxOf(info.size.width, info.size.height) / 256))
+        }
+        bitmap.hasGainmap().also { bitmap.recycle() }
+    }.getOrDefault(false)
+}
 
 /** The town (when known) above the coordinates, which few people can place by themselves. */
 internal fun MediaMetadata.locationText(): String {
@@ -195,11 +224,8 @@ fun MediaInfoContent(
 
             MetadataCard {
                 if (meta.resolutionFormatted.isNotBlank()) {
-                    val resSubtitle = if (meta.megapixelsFormatted.isNotBlank()) {
-                        "${meta.resolutionFormatted} • ${meta.megapixelsFormatted}"
-                    } else {
-                        meta.resolutionFormatted
-                    }
+                    val resSubtitle = listOfNotNull(meta.resolutionFormatted, meta.megapixelsFormatted.ifBlank { null }, meta.hdrLabel)
+                        .joinToString(" • ")
                     MetadataRow(Icons.Rounded.AspectRatio, strings.resolution, resSubtitle)
                 }
                 if (meta.fileSizeFormatted.isNotBlank()) {
@@ -319,7 +345,7 @@ fun HyperOsDetailInfoPage(item: MediaItem, onBack: () -> Unit, modifier: Modifie
         if (meta != null) {
             HyperOsInfoGroup(strings.fileInfo) {
                 Text(meta.fileName, color = palette.accent, fontSize = 16.sp)
-                val sizeLine = listOf(meta.fileSizeFormatted, meta.resolutionFormatted).filter { it.isNotBlank() }
+                val sizeLine = listOfNotNull(meta.fileSizeFormatted, meta.resolutionFormatted, meta.hdrLabel).filter { it.isNotBlank() }
                 if (sizeLine.isNotEmpty()) Text(sizeLine.joinToString("    "), color = palette.textMuted, fontSize = 16.sp)
                 val videoLine = listOfNotNull(meta.durationFormatted, meta.bitrateFormatted)
                 if (videoLine.isNotEmpty()) Text(videoLine.joinToString("    "), color = palette.textMuted, fontSize = 16.sp)
@@ -396,6 +422,7 @@ private fun OneUiMediaInfoContent(item: MediaItem, onEdit: (() -> Unit)?, modifi
                 meta.fileSizeFormatted.ifBlank { null },
                 meta.resolutionFormatted.ifBlank { null }?.replace(" ", "")?.replace("×", "x"),
                 meta.megapixelsFormatted.ifBlank { null }?.replace(" ", ""),
+                meta.hdrLabel,
                 meta.durationFormatted,
                 meta.bitrateFormatted
             )
@@ -477,6 +504,7 @@ private fun GoogleMediaInfoContent(item: MediaItem, modifier: Modifier) {
         val summary = listOfNotNull(
             time,
             meta?.megapixelsFormatted?.takeIf { it.isNotBlank() },
+            meta?.hdrLabel,
             meta?.fileSizeFormatted?.takeIf { it.isNotBlank() },
             meta?.durationFormatted
         ).joinToString("  ·  ")
@@ -714,6 +742,19 @@ private fun IosMediaInfoContent(item: MediaItem, modifier: Modifier) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
+                    if (meta.hdrLabel != null) {
+                        Text(
+                            text = "HDR",
+                            color = palette.onBackground,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .padding(end = 6.dp)
+                                .clip(CircleShape)
+                                .background(palette.onBackground.copy(alpha = 0.12f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
                     if (meta.formatLabel.isNotBlank()) {
                         Text(
                             text = meta.formatLabel,
@@ -1129,7 +1170,8 @@ private fun extractMediaMetadata(context: Context, item: MediaItem): MediaMetada
         focal35Text = focal35Text,
         formatLabel = item.mimeType.substringAfter('/', "").substringAfterLast('.').uppercase(Locale.ROOT)
             .removePrefix("X-").ifBlank { item.displayName.substringAfterLast('.', "").uppercase(Locale.ROOT) },
-        fullDate = fullDate
+        fullDate = fullDate,
+        hdrLabel = if (hasGainmap(context, item)) "Ultra HDR" else null
     )
 }
 
