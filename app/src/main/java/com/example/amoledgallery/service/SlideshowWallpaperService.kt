@@ -112,7 +112,8 @@ class SlideshowWallpaperService : WallpaperService() {
                 if (!visible) return
                 val minutes = if (unlocked) SlideshowWallpaperChoice.read(this@SlideshowWallpaperService)?.second ?: 30 else 30
                 if (current == null || System.currentTimeMillis() - lastChange >= minutes * 60_000L) next()
-                val fading = previous != null && System.currentTimeMillis() - fadeStart < FADE_MS
+                // Also the very first photo fades in (from black), so redraw until any fade is done.
+                val fading = System.currentTimeMillis() - fadeStart < FADE_MS + 50
                 draw()
                 handler.postDelayed(this, if (fading) 16L else 30_000L)
             }

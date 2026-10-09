@@ -373,11 +373,26 @@ fun CopyToAlbumSheet(items: List<MediaItem>) {
 
 @Composable
 fun PhotoWidgetHelpDialog() {
+    val context = LocalContext.current
+    // Launchers that can place a widget on request get a button for it; others need the manual way.
+    val manager = remember { context.getSystemService(android.appwidget.AppWidgetManager::class.java) }
+    val canPin = manager?.isRequestPinAppWidgetSupported == true
     ThemedDialog(
         onDismissRequest = { Features.closeDialog() },
         title = F.photoWidget,
-        message = F.photoWidgetHelp + "\n\n" + F.photoWidgetSubtitle,
-        buttons = listOf(DialogButton(strings.done, DialogButtonStyle.Primary) { Features.closeDialog() })
+        message = F.photoWidgetHelp + if (canPin) "" else "\n\n" + F.photoWidgetSubtitle,
+        buttons = buildList {
+            add(DialogButton(strings.close, DialogButtonStyle.Cancel) { Features.closeDialog() })
+            if (canPin) {
+                add(DialogButton(F.addToHomeScreen, DialogButtonStyle.Primary) {
+                    Features.closeDialog()
+                    manager?.requestPinAppWidget(
+                        android.content.ComponentName(context, com.example.amoledgallery.service.PhotoWidgetProvider::class.java),
+                        null, null
+                    )
+                })
+            }
+        }
     )
 }
 
