@@ -102,7 +102,8 @@ object F {
     val wrongPin get() = t("Wrong PIN", "Falsche PIN")
     val pinsDiffer get() = t("The PINs don't match", "Die PINs stimmen nicht überein")
     val pinHint get() = t("4 to 8 digits", "4 bis 8 Ziffern")
-    val unlockWithBiometrics get() = t("Use fingerprint", "Fingerabdruck verwenden")
+    val unlockWithBiometrics get() = t("Use fingerprint or screen lock", "Fingerabdruck oder Displaysperre")
+    val changePin get() = t("Change PIN", "PIN ändern")
     val privateEmptyTitle get() = t("Nothing private yet", "Noch nichts Privates")
     val privateEmptyMessage get() = t(
         "Select photos and choose \"Move to private album\". They are moved into the app's own storage, where no other app can see them.",

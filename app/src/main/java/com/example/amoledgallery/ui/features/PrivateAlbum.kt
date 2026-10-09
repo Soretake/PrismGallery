@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -84,6 +85,10 @@ object PrivateVault {
     fun setPin(context: Context, pin: String) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
         prefs(context).edit().putString("pin_salt", salt).putString("pin_hash", hash(salt, pin)).apply()
+    }
+
+    fun clearPin(context: Context) {
+        prefs(context).edit().remove("pin_hash").remove("pin_salt").apply()
     }
 
     fun checkPin(context: Context, pin: String): Boolean {
@@ -149,19 +154,25 @@ object PrivateVault {
 fun PrivateAlbumScreen() {
     val context = LocalContext.current
     var unlocked by remember { mutableStateOf(false) }
-    if (!unlocked) {
-        PinGate(onUnlocked = { unlocked = true })
+    // Changing the PIN: the old one stays valid until a new one has been entered twice.
+    var changingPin by remember { mutableStateOf(false) }
+    if (!unlocked || changingPin) {
+        androidx.compose.runtime.key(changingPin) {
+            PinGate(newPin = changingPin, onUnlocked = { unlocked = true; changingPin = false })
+        }
+        if (changingPin) androidx.activity.compose.BackHandler { changingPin = false }
     } else {
-        PrivateContent()
+        PrivateContent(onChangePin = { changingPin = true })
     }
 }
 
 /** Sets the PIN on first use; afterwards asks for it (or a fingerprint). */
 @Composable
-private fun PinGate(onUnlocked: () -> Unit) {
+private fun PinGate(newPin: Boolean = false, onUnlocked: () -> Unit) {
     val context = LocalContext.current
     val palette = LocalAppTheme.current.palette
-    val creating = remember { !PrivateVault.hasPin(context) }
+    val creating = remember { newPin || !PrivateVault.hasPin(context) }
+    // The phone's screen lock or fingerprint also opens it (and is how a forgotten PIN is replaced).
     var pin by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -257,11 +268,14 @@ private fun PinPad(onDigit: (String) -> Unit, onDelete: () -> Unit, onOk: () -> 
     }
 }
 
+/** Fingerprint/face, or the phone's own screen lock: either may open the album instead of the PIN. */
+private const val DEVICE_AUTH = android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+    android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
 private fun canUseBiometrics(context: Context): Boolean {
     if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return false
     val manager = context.getSystemService(android.hardware.biometrics.BiometricManager::class.java) ?: return false
-    return manager.canAuthenticate(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
-        android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS
+    return manager.canAuthenticate(DEVICE_AUTH) == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS
 }
 
 private fun authenticate(context: Context, onSuccess: () -> Unit) {
@@ -269,8 +283,8 @@ private fun authenticate(context: Context, onSuccess: () -> Unit) {
     val executor = context.mainExecutor
     val prompt = android.hardware.biometrics.BiometricPrompt.Builder(context)
         .setTitle(F.privateAlbum)
-        .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK)
-        .setNegativeButton(F.enterPin, executor) { _, _ -> }
+        // The screen lock counts too, so a forgotten album PIN never locks the photos away for good.
+        .setAllowedAuthenticators(DEVICE_AUTH)
         .build()
     prompt.authenticate(android.os.CancellationSignal(), executor, object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
         override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) = onSuccess()
@@ -278,7 +292,7 @@ private fun authenticate(context: Context, onSuccess: () -> Unit) {
 }
 
 @Composable
-private fun PrivateContent() {
+private fun PrivateContent(onChangePin: () -> Unit) {
     val context = LocalContext.current
     val env = LocalFeatureEnv.current
     val scope = rememberCoroutineScope()
@@ -292,6 +306,7 @@ private fun PrivateContent() {
         title = F.privateAlbum,
         subtitle = if (selection != null) F.selectedCount(selection!!.size) else strings.items(items.size),
         actions = {
+            com.example.amoledgallery.ui.design.ThemedIconButton(Icons.Rounded.Password, F.changePin, onClick = onChangePin)
             if (items.isNotEmpty()) {
                 com.example.amoledgallery.ui.design.ThemedIconButton(
                     Icons.Rounded.CheckCircle,
@@ -321,7 +336,8 @@ private fun PrivateContent() {
             ThemedEmptyState(Icons.Rounded.Lock, F.privateEmptyTitle, F.privateEmptyMessage)
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
+                // More, smaller tiles on wide screens, as on the other tool pages.
+                columns = GridCells.Fixed(maxOf(4, androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp / 110)),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = theme.shapes.gridHorizontalPadding,
