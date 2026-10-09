@@ -16,9 +16,19 @@ Prism Gallery is made for:
 - Photos, videos and GIFs from internal storage and the SD card
 - Albums: create, rename, hide, sub-albums, move media between albums, move whole albums between internal storage
   and SD card
-- Favorites and trash
+- Albums your way: groups, "Other albums" for rarely used ones, grid or list view, home-screen shortcuts
+- Favorites, trash, a private album (PIN, fingerprint or screen lock; stored inside the app)
+- Timeline by day, month or year; camera photos only, if you like
+- Search by name, album, place, date or type; Places and "On this day" - all on the device
 - Deep zoom, readable even on huge photos and very long scroll screenshots
-- Editor: crop, rotate and mirror photos and videos (saved as a copy)
+- Viewer: slideshow, motion photos, HDR photos, video speed / loop / mute, save a video frame, rotation lock
+- Editor (always saved as a copy): crop, rotate, mirror, brightness, contrast, saturation, warmth, vignette,
+  filters, drawing, text and a protective watermark; copy edits onto other photos. Videos: trim, make smaller,
+  brightness, contrast, saturation
+- Change a photo's date, time and location, or remove the location; share without location, as JPEG or smaller
+- Create collages, animated GIFs and PDFs; print
+- Clean up: duplicates, similar photos and bursts, old screenshots, large videos, RAW files
+- Slideshow wallpaper, video/GIF live wallpaper and a photo widget
 - Storage overview for internal storage and SD card
 - Open photos and videos from other apps ("Open with")
 - English and German
@@ -27,7 +37,8 @@ Prism Gallery is made for:
 ## Privacy
 
 Prism Gallery has no internet permission, so it cannot send anything anywhere. It only asks for access to your
-photos and videos. Settings stay on your device.
+photos and videos. Settings stay on your device. Place names are looked up in a list of towns bundled with the app,
+never online. The private album and its PIN are excluded from backups.
 
 ## Requirements
 
@@ -73,6 +84,11 @@ keyPassword=...
 
 Prism Gallery is an independent project and is not affiliated with, endorsed by or connected to Apple, Samsung,
 Xiaomi or Google. Their names are only used to describe the visual style each design is inspired by.
+
+## Credits
+
+Place names: [GeoNames](https://www.geonames.org/) (towns with 5000+ inhabitants), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## License
 

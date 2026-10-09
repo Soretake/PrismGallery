@@ -7,9 +7,16 @@ Gedacht ist sie für Custom ROMs ohne brauchbare Galerie, für Handys, deren ein
 <li>Vier Designs mit eigenen Layouts und Animationen, inspiriert von iOS (Liquid Glass), Samsung One UI, Xiaomi HyperOS und Google Gemini</li>
 <li>Fotos, Videos und GIFs aus internem Speicher und von der SD-Karte</li>
 <li>Alben: erstellen, umbenennen, ausblenden, Unteralben, Medien zwischen Alben verschieben, ganze Alben zwischen internem Speicher und SD-Karte verschieben</li>
-<li>Favoriten und Papierkorb</li>
+<li>Albumgruppen, „Weitere Alben“, Raster- oder Listenansicht, Album-Verknüpfungen auf dem Startbildschirm</li>
+<li>Favoriten, Papierkorb und privates Album (PIN, Fingerabdruck oder Displaysperre)</li>
+<li>Zeitleiste nach Tagen, Monaten oder Jahren; Suche nach Name, Album, Ort, Datum oder Art; Orte und „An diesem Tag“, alles offline</li>
 <li>Tiefer Zoom, lesbar selbst bei riesigen Fotos und sehr langen Scroll-Screenshots</li>
-<li>Editor: Fotos und Videos zuschneiden, drehen und spiegeln (als Kopie gespeichert)</li>
+<li>Diashow, bewegte Fotos, HDR-Fotos, Videotempo, Wiederholen und Stumm</li>
+<li>Editor (als Kopie gespeichert): zuschneiden, drehen, spiegeln, Anpassungen, Filter, Zeichnen, Text, Wasserzeichen; Videos kürzen und verkleinern</li>
+<li>Datum, Uhrzeit und Ort ändern; ohne Ort, als JPEG oder kleiner teilen</li>
+<li>Collagen, GIFs, PDFs und Drucken</li>
+<li>Aufräumen: Duplikate, ähnliche Fotos, alte Screenshots, große Videos und RAW-Dateien</li>
+<li>Diashow-Hintergrund, Live-Hintergrund und Foto-Widget</li>
 <li>Speicherübersicht für internen Speicher und SD-Karte</li>
 <li>Fotos und Videos aus anderen Apps öffnen („Öffnen mit“)</li>
 <li>Deutsch und Englisch</li>

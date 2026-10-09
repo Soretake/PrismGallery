@@ -7,9 +7,16 @@ It is made for custom ROMs that ship without a usable gallery, for phones whose 
 <li>Four design styles with their own layouts and animations, inspired by iOS (Liquid Glass), Samsung One UI, Xiaomi HyperOS and Google Gemini</li>
 <li>Photos, videos and GIFs from internal storage and the SD card</li>
 <li>Albums: create, rename, hide, sub-albums, move media between albums, move whole albums between internal storage and SD card</li>
-<li>Favorites and trash</li>
+<li>Album groups, "Other albums", grid or list view, home-screen shortcuts</li>
+<li>Favorites, trash and a private album (PIN, fingerprint or screen lock)</li>
+<li>Timeline by day, month or year; search by name, album, place, date or type; Places and "On this day", all offline</li>
 <li>Deep zoom, readable even on huge photos and very long scroll screenshots</li>
-<li>Editor: crop, rotate and mirror photos and videos (saved as a copy)</li>
+<li>Slideshow, motion photos, HDR photos, video speed, loop and mute</li>
+<li>Editor (saved as a copy): crop, rotate, mirror, adjustments, filters, drawing, text, watermark; videos: trim and make smaller</li>
+<li>Edit date, time and location; share without location, as JPEG or smaller</li>
+<li>Collages, GIFs, PDFs and printing</li>
+<li>Clean up duplicates, similar photos, old screenshots, large videos and RAW files</li>
+<li>Slideshow wallpaper, live wallpaper and photo widget</li>
 <li>Storage overview for internal storage and SD card</li>
 <li>Open photos and videos from other apps ("Open with")</li>
 <li>English and German</li>
