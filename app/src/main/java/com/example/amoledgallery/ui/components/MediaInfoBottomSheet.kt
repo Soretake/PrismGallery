@@ -1171,7 +1171,15 @@ private fun extractMediaMetadata(context: Context, item: MediaItem): MediaMetada
         formatLabel = item.mimeType.substringAfter('/', "").substringAfterLast('.').uppercase(Locale.ROOT)
             .removePrefix("X-").ifBlank { item.displayName.substringAfterLast('.', "").uppercase(Locale.ROOT) },
         fullDate = fullDate,
-        hdrLabel = if (hasGainmap(context, item)) "Ultra HDR" else null
+        hdrLabel = if (hasGainmap(context, item)) {
+            // Android says whether this screen can light photo highlights above white at all; when it cannot,
+            // HDR photos look like normal photos in every app (HDR video uses a separate path).
+            val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+                ?.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            if (display != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                !display.isHdrSdrRatioAvailable
+            ) "Ultra HDR (${com.example.amoledgallery.ui.i18n.F.hdrScreenUnsupported})" else "Ultra HDR"
+        } else null
     )
 }
 

@@ -173,6 +173,7 @@ object F {
     val restoreShort get() = t("Restore", "Zurückholen")
     fun deletePrivateTitle(n: Int) = t(if (n == 1) "Delete this photo for good?" else "Delete $n photos for good?", if (n == 1) "Dieses Foto endgültig löschen?" else "$n Fotos endgültig löschen?")
     val deletePrivateMessage get() = t("They are removed from the private album and cannot be brought back.", "Sie werden aus dem privaten Album gelöscht und lassen sich nicht zurückholen.")
+    val hdrScreenUnsupported get() = t("this screen shows no HDR photos", "Bildschirm zeigt keine HDR-Fotos")
     val deleteKey get() = t("Delete", "Löschen")
     val frameColor get() = t("Frame colour", "Rahmenfarbe")
     val white get() = t("White", "Weiß")
