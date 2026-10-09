@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.rounded.BurstMode
 import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.PhotoCamera
@@ -153,7 +154,8 @@ fun SimilarScreen() {
     val selectedItems = all.filter { it.id in selection }
     FeaturePage(
         title = F.similarPhotos,
-        subtitle = if (groups.isNotEmpty()) "${groups.size}" else null,
+        subtitle = if (selectedItems.isNotEmpty()) F.selectedFrees(selectedItems.size, readableSize(selectedItems.sumOf { it.size }))
+            else if (groups.isNotEmpty()) "${groups.size}" else null,
         bottomBar = if (selectedItems.isNotEmpty()) {
             { TrashBar(selectedItems) { env.vm.trashItems(selectedItems); selection = emptySet() } }
         } else null
@@ -188,21 +190,11 @@ internal fun ScanProgress(text: String, progress: Float) {
 /** The floating "move to trash" bar under a selection, with what it frees. */
 @Composable
 internal fun TrashBar(items: List<MediaItem>, onTrash: () -> Unit) {
-    val palette = LocalAppTheme.current.palette
-    Box(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-    Column(
-        modifier = Modifier
-            .widthIn(max = 560.dp)
-            .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
-            .background(palette.surface.copy(alpha = 0.96f))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(F.selectedFrees(items.size, readableSize(items.sumOf { it.size })), color = palette.textMuted, fontSize = 13.sp)
-        ThemedButton(F.moveToTrash, onClick = onTrash, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), style = DialogButtonStyle.Primary)
-    }
-    }
+    // The size this frees is shown in the page's subtitle; the bar itself is the design's selection bar.
+    com.example.amoledgallery.ui.components.ThemedActionBar(
+        selectedCount = items.size,
+        actions = listOf(com.example.amoledgallery.ui.components.BarAction(androidx.compose.material.icons.Icons.Outlined.Delete, strings.delete, onTrash))
+    )
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -245,26 +237,17 @@ fun CleanUpScreen() {
             onClick = if (items.isEmpty()) null else ({ Features.open(FeatureScreen.CleanCategory(kind)) })
         )
     }
-    FeaturePage(title = F.cleanUp) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = featureTopPadding(), bottom = featureBottomPadding()),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            ThemedListSection(rows = rows)
-            ThemedListSection(
-                rows = listOf(
-                    ListRow(F.similarPhotos, subtitle = F.similarSubtitle, icon = Icons.Rounded.BurstMode, iconColor = Color(0xFF00A9A5), onClick = { Features.open(FeatureScreen.Similar) }),
-                    ListRow(strings.duplicates, subtitle = strings.duplicatesSubtitle, icon = Icons.Rounded.CleaningServices, iconColor = Color(0xFF00A9A5), onClick = {
-                        Features.screens.clear()
-                        env.vm.openDuplicates()
-                    })
-                )
+    FeatureMenuPage(title = F.cleanUp) {
+        ThemedListSection(rows = rows)
+        ThemedListSection(
+            rows = listOf(
+                ListRow(F.similarPhotos, subtitle = F.similarSubtitle, icon = Icons.Rounded.BurstMode, iconColor = Color(0xFF00A9A5), onClick = { Features.open(FeatureScreen.Similar) }),
+                ListRow(strings.duplicates, subtitle = strings.duplicatesSubtitle, icon = Icons.Rounded.CleaningServices, iconColor = Color(0xFF00A9A5), onClick = {
+                    Features.screens.clear()
+                    env.vm.openDuplicates()
+                })
             )
-        }
+        )
     }
 }
 
@@ -277,7 +260,8 @@ fun CleanCategoryScreen(kind: CleanKind) {
     val selectedItems = items.filter { it.id in selection }
     FeaturePage(
         title = cleanTitle(kind),
-        subtitle = strings.items(items.size),
+        subtitle = if (selectedItems.isNotEmpty()) F.selectedFrees(selectedItems.size, readableSize(selectedItems.sumOf { it.size }))
+            else strings.items(items.size),
         bottomBar = if (selectedItems.isNotEmpty()) {
             { TrashBar(selectedItems) { env.vm.trashItems(selectedItems); selection = emptySet() } }
         } else null

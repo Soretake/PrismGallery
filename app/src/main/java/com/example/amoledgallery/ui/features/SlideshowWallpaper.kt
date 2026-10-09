@@ -45,54 +45,45 @@ fun SlideshowWallpaperScreen() {
     var bucket by remember { mutableStateOf(saved?.first) }
     var minutes by remember { mutableIntStateOf(saved?.second ?: 30) }
     val palette = LocalAppTheme.current.palette
-    FeaturePage(title = F.slideshowWallpaper) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = featureTopPadding(), bottom = featureBottomPadding()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(F.slideshowWallpaperSubtitle, color = palette.textMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp))
-            Text(F.changeEvery, color = palette.onBackground, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 8.dp))
-            ThemedSegmentedControl(
-                options = listOf(5, 30, 60, 240),
-                selected = minutes,
-                label = { if (it < 60) F.minutes(it) else F.hours(it / 60) },
-                onSelect = { minutes = it }
-            )
-            ThemedButton(
-                F.apply,
-                enabled = bucket != null,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    val chosen = bucket ?: return@ThemedButton
-                    SlideshowWallpaperChoice.write(context, chosen, minutes)
-                    val component = ComponentName(context, SlideshowWallpaperService::class.java)
-                    val opened = runCatching {
-                        context.startActivity(
-                            Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
-                                .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
-                        )
-                        true
-                    }.getOrDefault(false)
-                    if (!opened) runCatching { context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)) }
-                }
-            )
-            ThemedListSection(
-                header = F.chooseAlbum,
-                rows = albums.filter { it.count > 0 }.sortedBy { it.name.lowercase() }.map { album ->
-                    ListRow(
-                        album.name,
-                        subtitle = strings.items(album.count),
-                        icon = if (album.bucketId == bucket) Icons.Rounded.CheckCircle else Icons.Rounded.Folder,
-                        iconColor = palette.accent,
-                        showChevron = false,
-                        onClick = { bucket = album.bucketId }
+    FeatureMenuPage(title = F.slideshowWallpaper) {
+        Text(F.slideshowWallpaperSubtitle, color = palette.textMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        Text(F.changeEvery, color = palette.onBackground, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        ThemedSegmentedControl(
+            options = listOf(5, 30, 60, 240),
+            selected = minutes,
+            label = { if (it < 60) F.minutes(it) else F.hours(it / 60) },
+            onSelect = { minutes = it }
+        )
+        ThemedButton(
+            F.apply,
+            enabled = bucket != null,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                val chosen = bucket ?: return@ThemedButton
+                SlideshowWallpaperChoice.write(context, chosen, minutes)
+                val component = ComponentName(context, SlideshowWallpaperService::class.java)
+                val opened = runCatching {
+                    context.startActivity(
+                        Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+                            .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component)
                     )
-                }
-            )
-        }
+                    true
+                }.getOrDefault(false)
+                if (!opened) runCatching { context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)) }
+            }
+        )
+        ThemedListSection(
+            header = F.chooseAlbum,
+            rows = albums.filter { it.count > 0 }.sortedBy { it.name.lowercase() }.map { album ->
+                ListRow(
+                    album.name,
+                    subtitle = strings.items(album.count),
+                    icon = if (album.bucketId == bucket) Icons.Rounded.CheckCircle else Icons.Rounded.Folder,
+                    iconColor = palette.accent,
+                    showChevron = false,
+                    onClick = { bucket = album.bucketId }
+                )
+            }
+        )
     }
 }

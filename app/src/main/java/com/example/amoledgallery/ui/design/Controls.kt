@@ -539,10 +539,25 @@ fun ThemedListSection(
     val language = theme.language
 
     Column(modifier = modifier.fillMaxWidth()) {
-        if (header != null) ThemedSectionHeader(header)
+        if (header != null) {
+            // On a page the headers follow the design's own menu; on sheets the compact form.
+            when {
+                inSheet -> ThemedSectionHeader(header)
+                language == DesignLanguage.XIAOMI_HYPEROS ->
+                    HyperOsSectionLabel(header, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp))
+                language == DesignLanguage.GOOGLE_EXPRESSIVE ->
+                    Text(header, color = palette.textMuted, fontSize = 17.sp, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 4.dp))
+                else -> ThemedSectionHeader(header)
+            }
+        }
 
-        when (language) {
-            DesignLanguage.GOOGLE_EXPRESSIVE -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        when {
+            // Page lists look like the design's menu: Gemini's drawer rows and HyperOS's rows sit on the
+            // background without a card.
+            !inSheet && (language == DesignLanguage.GOOGLE_EXPRESSIVE || language == DesignLanguage.XIAOMI_HYPEROS) ->
+                Column { rows.forEach { ListRowContent(it, page = true) } }
+
+            language == DesignLanguage.GOOGLE_EXPRESSIVE -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 rows.forEachIndexed { index, row ->
                     val first = index == 0
                     val last = index == rows.lastIndex
@@ -569,7 +584,7 @@ fun ThemedListSection(
             else -> Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(theme.shapes.cardCornerRadius))
+                    .clip(RoundedCornerShape(if (!inSheet && language == DesignLanguage.SAMSUNG_ONEUI) 26.dp else theme.shapes.cardCornerRadius))
                     .background(if (inSheet) palette.surfaceVariant else palette.surface)
                     .padding(vertical = if (language == DesignLanguage.XIAOMI_HYPEROS) 6.dp else 0.dp)
             ) {
@@ -577,11 +592,11 @@ fun ThemedListSection(
                     if (index > 0 && language != DesignLanguage.XIAOMI_HYPEROS) {
                         val inset = when (language) {
                             DesignLanguage.IOS_LIQUID_GLASS -> if (row.icon != null) 60.dp else 16.dp
-                            else -> if (row.icon != null) 64.dp else 22.dp
+                            else -> if (row.icon != null) (if (inSheet) 64.dp else 78.dp) else 22.dp
                         }
                         Box(
                             modifier = Modifier
-                                .padding(start = inset)
+                                .padding(start = inset, end = if (!inSheet && language == DesignLanguage.SAMSUNG_ONEUI) 20.dp else 0.dp)
                                 .fillMaxWidth()
                                 .height(if (language == DesignLanguage.IOS_LIQUID_GLASS) 0.5.dp else 1.dp)
                                 .background(
@@ -590,7 +605,7 @@ fun ThemedListSection(
                                 )
                         )
                     }
-                    ListRowContent(row)
+                    ListRowContent(row, page = !inSheet)
                 }
             }
         }
@@ -598,11 +613,15 @@ fun ThemedListSection(
 }
 
 @Composable
-private fun ListRowContent(row: ListRow) {
+private fun ListRowContent(row: ListRow, page: Boolean = false) {
     val theme = LocalAppTheme.current
     val palette = theme.palette
     val language = theme.language
     val iconColor = if (row.iconColor == Color.Unspecified) palette.accent else row.iconColor
+    if (page && language != DesignLanguage.IOS_LIQUID_GLASS) {
+        PageRowContent(row, iconColor)
+        return
+    }
 
     Row(
         modifier = Modifier
@@ -693,6 +712,97 @@ private fun ListRowContent(row: ListRow) {
                 tint = palette.textMuted.copy(alpha = if (language == DesignLanguage.XIAOMI_HYPEROS) 0.55f else 0.75f),
                 modifier = Modifier.size(22.dp)
             )
+        }
+    }
+}
+
+/**
+ * A list row on a page, drawn like the rows of the design's own menu: One UI's coloured circle with the
+ * subtitle in the accent colour, HyperOS's coloured rounded square with a chevron, Gemini's plain icon in a
+ * drawer row.
+ */
+@Composable
+private fun PageRowContent(row: ListRow, iconColor: Color) {
+    val palette = LocalAppTheme.current.palette
+    val language = LocalAppTheme.current.language
+    val titleColor = if (row.titleColor == Color.Unspecified) palette.onBackground else row.titleColor
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (language == DesignLanguage.GOOGLE_EXPRESSIVE) Modifier.clip(CircleShape) else Modifier)
+            .then(
+                if (row.onClick != null) {
+                    Modifier.clickable(interactionSource = interaction, indication = ripple(color = palette.onBackground), onClick = row.onClick)
+                } else {
+                    Modifier
+                }
+            )
+            .padding(
+                horizontal = if (language == DesignLanguage.XIAOMI_HYPEROS) 12.dp else 20.dp,
+                vertical = when (language) {
+                    DesignLanguage.XIAOMI_HYPEROS -> 11.dp
+                    DesignLanguage.GOOGLE_EXPRESSIVE -> if (row.subtitle != null) 12.dp else 16.dp
+                    else -> 16.dp
+                }
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (row.icon != null) {
+            when (language) {
+                DesignLanguage.SAMSUNG_ONEUI -> {
+                    Box(
+                        modifier = Modifier.size(40.dp).clip(CircleShape).background(iconColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(row.icon, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(modifier = Modifier.width(18.dp))
+                }
+                DesignLanguage.XIAOMI_HYPEROS -> {
+                    Box(
+                        modifier = Modifier
+                            .pressScale(interaction, 0.88f)
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(iconColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(row.icon, null, tint = contentOn(iconColor), modifier = Modifier.size(26.dp))
+                    }
+                    Spacer(modifier = Modifier.width(20.dp))
+                }
+                else -> {
+                    Icon(row.icon, null, tint = titleColor, modifier = Modifier.size(26.dp))
+                    Spacer(modifier = Modifier.width(24.dp))
+                }
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                row.title,
+                color = titleColor,
+                fontSize = if (language == DesignLanguage.GOOGLE_EXPRESSIVE) 20.sp else 19.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (row.subtitle != null) {
+                Text(
+                    row.subtitle,
+                    color = if (language == DesignLanguage.SAMSUNG_ONEUI) palette.accent else palette.textMuted,
+                    fontSize = 14.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (row.value != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(row.value, color = palette.textMuted, fontSize = if (language == DesignLanguage.GOOGLE_EXPRESSIVE) 16.sp else 15.sp, maxLines = 1)
+        }
+        if (row.showChevron && row.onClick != null && language == DesignLanguage.XIAOMI_HYPEROS) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = palette.textMuted.copy(alpha = 0.55f), modifier = Modifier.size(22.dp))
         }
     }
 }

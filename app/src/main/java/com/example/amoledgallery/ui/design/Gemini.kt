@@ -376,7 +376,7 @@ fun Modifier.geminiChip(shape: Shape): Modifier {
     } else {
         this
             .clip(shape)
-            .background(Color(0xFF1E1F20).copy(alpha = 0.92f))
+            .background(Color(0xFF2A2B2E).copy(alpha = 0.88f))
     }
 }
 
@@ -526,11 +526,11 @@ fun GeminiStorageRing(
  * than a lighter lozenge. [geminiSelectionEdge] keeps it visible where the scene behind is dark too.
  */
 fun geminiSelectionFill(light: Boolean): Color =
-    if (light) Color.Black.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.38f)
+    if (light) Color.Black.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.22f)
 
 fun geminiSelectionEdge(light: Boolean): Color =
     if (light) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.10f)
 
 /** The same selection on the plain background, where darker than black is not possible: the dark chip grey. */
 fun geminiSelectionOnBackground(light: Boolean): Color =
-    if (light) Color.Black.copy(alpha = 0.08f) else Color(0xFF1E1F20)
+    if (light) Color.Black.copy(alpha = 0.08f) else Color(0xFF2A2B2E)

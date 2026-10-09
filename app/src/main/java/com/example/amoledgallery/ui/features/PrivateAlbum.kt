@@ -24,6 +24,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Unarchive
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
@@ -41,6 +44,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import com.example.amoledgallery.ui.components.MediaGridItem
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -176,6 +181,7 @@ private fun PinGate(newPin: Boolean = false, onUnlocked: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var errorCount by remember { mutableIntStateOf(0) }
     val biometrics = remember { !creating && canUseBiometrics(context) }
 
     fun submit() {
@@ -184,11 +190,11 @@ private fun PinGate(newPin: Boolean = false, onUnlocked: () -> Unit) {
             val f = first
             if (f == null) { first = pin; pin = ""; error = null }
             else if (f == pin) { PrivateVault.setPin(context, pin); onUnlocked() }
-            else { first = null; pin = ""; error = F.pinsDiffer }
+            else { first = null; pin = ""; error = F.pinsDiffer; errorCount++ }
         } else if (PrivateVault.checkPin(context, pin)) {
             onUnlocked()
         } else {
-            pin = ""; error = F.wrongPin
+            pin = ""; error = F.wrongPin; errorCount++
         }
     }
     LaunchedEffect(Unit) { if (biometrics) authenticate(context, onUnlocked) }
@@ -203,26 +209,17 @@ private fun PinGate(newPin: Boolean = false, onUnlocked: () -> Unit) {
                 .padding(top = featureTopPadding(), bottom = featureBottomPadding()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.Rounded.Lock, null, tint = palette.accent, modifier = Modifier.size(56.dp))
-            Spacer(Modifier.height(18.dp))
-            Text(
-                when {
+            PinScreen(
+                title = when {
                     !creating -> F.enterPin
                     first == null -> F.setPin
                     else -> F.repeatPin
                 },
-                color = palette.onBackground, fontSize = 22.sp
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(error ?: F.pinHint, color = if (error != null) Color(0xFFF14438) else palette.textMuted, fontSize = 14.sp)
-            Spacer(Modifier.height(18.dp))
-            Text(
-                "●".repeat(pin.length).ifEmpty { " " },
-                color = palette.onBackground, fontSize = 26.sp, letterSpacing = 6.sp
-            )
-            Spacer(Modifier.height(18.dp))
-            PinPad(
-                onDigit = { if (pin.length < 8) pin += it },
+                message = error ?: F.pinHint,
+                isError = error != null,
+                errorCount = errorCount,
+                length = pin.length,
+                onDigit = { if (pin.length < 8) { pin += it; error = null } },
                 onDelete = { pin = pin.dropLast(1) },
                 onOk = { submit() }
             )
@@ -233,36 +230,6 @@ private fun PinGate(newPin: Boolean = false, onUnlocked: () -> Unit) {
             if (creating) {
                 Spacer(Modifier.height(18.dp))
                 Text(F.privateWarning, color = palette.textMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PinPad(onDigit: (String) -> Unit, onDelete: () -> Unit, onOk: () -> Unit) {
-    val palette = LocalAppTheme.current.palette
-    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK")
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        keys.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                row.forEach { key ->
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(palette.surfaceVariant)
-                            .clickable {
-                                when (key) {
-                                    "⌫" -> onDelete()
-                                    "OK" -> onOk()
-                                    else -> onDigit(key)
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(key, color = if (key == "OK") palette.accent else palette.onBackground, fontSize = 22.sp)
-                    }
-                }
             }
         }
     }
@@ -300,7 +267,9 @@ private fun PrivateContent(onChangePin: () -> Unit) {
     val items = remember(version) { PrivateVault.items(context) }
     var selection by remember { mutableStateOf<Set<Long>?>(null) }
     var openIndex by remember { mutableStateOf<Int?>(null) }
+    var confirmDelete by remember { mutableStateOf<List<MediaItem>?>(null) }
     val theme = LocalAppTheme.current
+    if (selection != null) androidx.activity.compose.BackHandler { selection = null }
 
     FeaturePage(
         title = F.privateAlbum,
@@ -315,20 +284,29 @@ private fun PrivateContent(onChangePin: () -> Unit) {
                 )
             }
         },
-        bottomBar = if (!selection.isNullOrEmpty()) {
+        bottomBar = if (selection != null) {
             {
-                Box(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
-                    ThemedButton(F.restoreFromPrivate, modifier = Modifier.fillMaxWidth(), onClick = {
-                        val chosen = items.filter { it.id in selection!! }
-                        selection = null
-                        scope.launch {
-                            val count = withContext(Dispatchers.IO) { PrivateVault.restoreAll(context, chosen) }
-                            env.vm.message(F.restoredFromPrivate(count))
-                            version++
-                            env.vm.refreshAfterEdit()
+                val chosen = items.filter { it.id in selection.orEmpty() }
+                com.example.amoledgallery.ui.components.ThemedActionBar(
+                    selectedCount = chosen.size,
+                    actions = listOf(
+                        com.example.amoledgallery.ui.components.BarAction(Icons.Outlined.Share, strings.share) {
+                            sharePrivate(context, chosen)
+                        },
+                        com.example.amoledgallery.ui.components.BarAction(Icons.Outlined.Unarchive, F.restoreShort) {
+                            selection = null
+                            scope.launch {
+                                val count = withContext(Dispatchers.IO) { PrivateVault.restoreAll(context, chosen) }
+                                env.vm.message(F.restoredFromPrivate(count))
+                                version++
+                                env.vm.refreshAfterEdit()
+                            }
+                        },
+                        com.example.amoledgallery.ui.components.BarAction(Icons.Outlined.Delete, strings.delete) {
+                            confirmDelete = chosen
                         }
-                    })
-                }
+                    )
+                )
             }
         } else null
     ) {
@@ -350,41 +328,39 @@ private fun PrivateContent(onChangePin: () -> Unit) {
             ) {
                 items(items, key = { it.dataPath }) { item ->
                     val selected = selection?.contains(item.id) == true
-                    Box(
-                        modifier = Modifier
-                            .aspectRatio(1f)
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(theme.shapes.gridSpacing))
-                            .clickable {
-                                val s = selection
-                                if (s != null) selection = if (selected) s - item.id else s + item.id
-                                else openIndex = items.indexOf(item)
-                            }
-                    ) {
-                        AsyncImage(
-                            model = File(item.dataPath),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        if (item.isVideo) {
-                            Icon(Icons.Rounded.PlayCircle, null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(30.dp))
-                        }
-                        if (selection != null) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(if (selected) Color.Black.copy(alpha = 0.35f) else Color.Transparent)
-                            )
-                            Icon(
-                                Icons.Rounded.CheckCircle, null,
-                                tint = if (selected) theme.palette.accent else Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp)
-                            )
-                        }
-                    }
+                    MediaGridItem(
+                        // Id 0: the thumbnail is decoded from the file each time and never written to the
+                        // thumbnail cache, which other photos' ids could later reuse.
+                        item = item.copy(id = 0L),
+                        isSelectionMode = selection != null,
+                        isSelected = selected,
+                        onClick = {
+                            val s = selection
+                            if (s != null) selection = if (selected) s - item.id else s + item.id
+                            else openIndex = items.indexOf(item)
+                        },
+                        modifier = Modifier.aspectRatio(1f).clipToBounds()
+                    )
                 }
             }
         }
+    }
+
+    confirmDelete?.let { doomed ->
+        com.example.amoledgallery.ui.design.ThemedDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = F.deletePrivateTitle(doomed.size),
+            message = F.deletePrivateMessage,
+            buttons = listOf(
+                com.example.amoledgallery.ui.design.DialogButton(strings.cancel, com.example.amoledgallery.ui.design.DialogButtonStyle.Cancel) { confirmDelete = null },
+                com.example.amoledgallery.ui.design.DialogButton(strings.delete, com.example.amoledgallery.ui.design.DialogButtonStyle.Destructive) {
+                    confirmDelete = null
+                    selection = null
+                    doomed.forEach { File(it.dataPath).delete() }
+                    version++
+                }
+            )
+        )
     }
 
     val holder = remember { IntArray(1) }
@@ -415,7 +391,11 @@ fun moveToPrivate(context: Context, env: FeatureEnv, items: List<MediaItem>, sco
         }
         env.vm.deleteItemsForGood(
             copied,
-            onDone = { env.vm.message(F.movedToPrivate(copied.size)) },
+            onDone = {
+                // The moved photos are gone from the gallery, so the selection that held them ends too.
+                env.vm.clearSelection()
+                env.vm.message(F.movedToPrivate(copied.size))
+            },
             onCancelled = {
                 // The originals stay: the copies would only be doubles, so they go again.
                 copied.forEach { item ->
@@ -424,4 +404,22 @@ fun moveToPrivate(context: Context, env: FeatureEnv, items: List<MediaItem>, sco
             }
         )
     }
+}
+
+/** Shares private photos through the app's own file provider, readable only by the app that receives them. */
+private fun sharePrivate(context: Context, items: List<MediaItem>) {
+    if (items.isEmpty()) return
+    val uris = ArrayList(items.map { it.uri })
+    val mime = items.map { it.mimeType }.distinct().singleOrNull() ?: "*/*"
+    val intent = if (uris.size == 1) {
+        android.content.Intent(android.content.Intent.ACTION_SEND).putExtra(android.content.Intent.EXTRA_STREAM, uris[0])
+    } else {
+        android.content.Intent(android.content.Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, uris)
+    }
+        .setType(mime)
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    intent.clipData = android.content.ClipData.newUri(context.contentResolver, "", uris[0]).apply {
+        uris.drop(1).forEach { addItem(android.content.ClipData.Item(it)) }
+    }
+    runCatching { context.startActivity(android.content.Intent.createChooser(intent, null)) }
 }

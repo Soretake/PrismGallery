@@ -820,3 +820,100 @@ private fun GlassCircleAction(
         Icon(icon, label, tint = if (enabled) tint else tint.copy(alpha = 0.35f), modifier = Modifier.size(23.dp))
     }
 }
+
+/** One action of a [ThemedActionBar]. */
+data class BarAction(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+
+/**
+ * The selection bar of [SelectionActionBar] with other actions (restore from the private album, move to the
+ * trash...), in the same form for each design. On iOS the first action sits left and the last one right of
+ * the count capsule, as share and delete do there.
+ */
+@Composable
+fun ThemedActionBar(selectedCount: Int, actions: List<BarAction>, modifier: Modifier = Modifier) {
+    val theme = LocalAppTheme.current
+    val palette = theme.palette
+    val enabled = selectedCount > 0
+    when (theme.language) {
+        DesignLanguage.SAMSUNG_ONEUI, DesignLanguage.GOOGLE_EXPRESSIVE -> Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(top = 8.dp, bottom = if (theme.language == DesignLanguage.SAMSUNG_ONEUI) 10.dp else 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val shape = RoundedCornerShape(percent = 50)
+            Row(
+                modifier = Modifier
+                    .height(if (theme.language == DesignLanguage.SAMSUNG_ONEUI) 66.dp else 72.dp)
+                    .then(
+                        if (theme.language == DesignLanguage.SAMSUNG_ONEUI) {
+                            Modifier.glass(shape)
+                        } else {
+                            Modifier.geminiGlass(shape, tintAlpha = com.example.amoledgallery.ui.design.GEMINI_PILL_TINT, blur = com.example.amoledgallery.ui.design.GeminiPillBlur, vivid = true)
+                        }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                actions.forEach { action ->
+                    LabeledAction(action.icon, action.label, enabled, palette.onBackground, Modifier.width(96.dp), action.onClick)
+                }
+            }
+        }
+
+        DesignLanguage.IOS_LIQUID_GLASS -> Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            actions.firstOrNull()?.let { GlassCircleAction(it.icon, it.label, enabled, palette.onBackground, it.onClick) }
+            Spacer(modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .height(56.dp)
+                    .glass(RoundedCornerShape(percent = 50))
+                    .padding(horizontal = if (actions.size > 2) 8.dp else 28.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (actions.size > 2) {
+                    actions.subList(1, actions.size - 1).forEach { ToolbarIcon(it.icon, it.label, enabled, it.onClick) }
+                } else {
+                    Text(
+                        text = if (enabled) strings.showSelection(selectedCount) else strings.selectItems,
+                        color = palette.onBackground,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            if (actions.size > 1) actions.last().let { GlassCircleAction(it.icon, it.label, enabled, palette.onBackground, it.onClick) }
+        }
+
+        DesignLanguage.XIAOMI_HYPEROS -> Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(palette.background)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.5.dp)
+                    .background(palette.onBackground.copy(alpha = if (palette.isLight) 0.08f else 0.12f))
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(64.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val tint = palette.onBackground.copy(alpha = 0.85f)
+                actions.forEach { LabeledAction(it.icon, it.label, enabled, tint, Modifier.weight(1f), it.onClick) }
+            }
+        }
+    }
+}
