@@ -25,3 +25,4 @@ keystore.properties
 /log.txt
 /logcat*.txt
 /xml.xml
+*.apk

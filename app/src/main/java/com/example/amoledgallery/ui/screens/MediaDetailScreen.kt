@@ -674,8 +674,9 @@ fun MediaDetailScreen(
                     DetailViewOnlyBar(language, lightChrome, detailHaze, actions)
                 } else if (trashMode) {
                     DetailTrashBar(language, lightChrome, detailHaze, actions)
-                } else if (language == DesignLanguage.SAMSUNG_ONEUI && mediaList.size > 1) {
-                    // One UI: the strip of neighbouring photos above the toolbar.
+                } else if (language == DesignLanguage.SAMSUNG_ONEUI && mediaList.size > 1 && !currentItem.isVideo) {
+                    // One UI: the strip of neighbouring photos above the toolbar (not on videos, where the
+                    // player's seek bar sits in that place).
                     Column(modifier = Modifier.fillMaxWidth()) {
                         OneUiFilmstrip(mediaList, pagerState)
                         DetailBottomBar(language, lightChrome, detailHaze, actions)

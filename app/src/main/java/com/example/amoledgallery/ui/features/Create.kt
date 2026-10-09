@@ -198,7 +198,8 @@ private fun CollageOptions(items: List<MediaItem>, onBack: () -> Unit) {
             ThemedSegmentedControl(layouts.indices.toList(), layoutIndex, { "${it + 1}" }, { layoutIndex = it })
             Text(F.spacing, color = palette.textMuted, fontSize = 14.sp)
             ThemedSegmentedControl(listOf(0, 1, 2), gap, { listOf("0", "S", "L")[it] }, { gap = it })
-            ThemedSegmentedControl(listOf(true, false), white, { if (it) "□" else "■" }, { white = it })
+            Text(F.frameColor, color = palette.textMuted, fontSize = 14.sp)
+            ThemedSegmentedControl(listOf(true, false), white, { if (it) F.white else F.black }, { white = it })
             ThemedButton(if (saving) F.creating else com.example.amoledgallery.ui.i18n.strings.save, enabled = !saving && sources != null, modifier = Modifier.fillMaxWidth(), onClick = {
                 val src = sources ?: return@ThemedButton
                 saving = true

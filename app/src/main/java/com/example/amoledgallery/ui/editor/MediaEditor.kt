@@ -16,6 +16,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
 import androidx.media3.common.Effect
+import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Crop
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.Composition
@@ -123,6 +124,52 @@ object MediaEditor {
         }
     }
 
+    /**
+     * The smaller size of an edited video: "720p" means 720 on the short side, so portrait videos keep their
+     * shape (scaling the height to 720 made them 405 wide, which phone encoders turned into tiny videos).
+     * The long side is rounded to a multiple of 16, which every encoder accepts. Null when the video is
+     * already that small (it is never scaled up).
+     */
+    private fun outputSize(context: Context, item: MediaItem, spec: EditSpec): Pair<Int, Int>? {
+        val retriever = MediaMetadataRetriever()
+        val (sourceW, sourceH) = try {
+            retriever.setDataSource(context, item.uri)
+            val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+            val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            if (rotation % 180 != 0) h to w else w to h
+        } catch (e: Exception) {
+            item.width to item.height
+        } finally {
+            runCatching { retriever.release() }
+        }
+        if (sourceW <= 0 || sourceH <= 0) return null
+        // After the editor's own rotation and crop.
+        val turned = spec.rotation % 180 != 0
+        val w = (if (turned) sourceH else sourceW) * (spec.crop.right - spec.crop.left)
+        val h = (if (turned) sourceW else sourceH) * (spec.crop.bottom - spec.crop.top)
+        val short = minOf(w, h)
+        if (short <= spec.maxVideoHeight) return null
+        val scale = spec.maxVideoHeight / short
+        val long = ((maxOf(w, h) * scale / 16f).roundToInt() * 16).coerceAtLeast(16)
+        return if (w <= h) spec.maxVideoHeight to long else long to spec.maxVideoHeight
+    }
+
+    /** The codec of the first video track (e.g. "video/avc"), or null when it cannot be read. */
+    private fun videoCodec(context: Context, uri: Uri): String? {
+        val extractor = android.media.MediaExtractor()
+        return try {
+            extractor.setDataSource(context, uri, null)
+            (0 until extractor.trackCount)
+                .map { extractor.getTrackFormat(it).getString(android.media.MediaFormat.KEY_MIME) }
+                .firstOrNull { it?.startsWith("video/") == true }
+        } catch (e: Exception) {
+            null
+        } finally {
+            extractor.release()
+        }
+    }
+
     private fun loadVideoFrame(context: Context, uri: Uri, maxSize: Int): Bitmap? {
         val retriever = MediaMetadataRetriever()
         try {
@@ -203,7 +250,11 @@ object MediaEditor {
                     }
                     videoLookEffects(spec.looks, effects)
                     if (spec.maxVideoHeight > 0) {
-                        effects += androidx.media3.effect.Presentation.createForHeight(spec.maxVideoHeight)
+                        outputSize(context, item, spec)?.let { (w, h) ->
+                            effects += androidx.media3.effect.Presentation.createForWidthAndHeight(
+                                w, h, androidx.media3.effect.Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP
+                            )
+                        }
                     }
                     val mediaItem = ExoMediaItem.Builder().setUri(item.uri).apply {
                         if (spec.trimStartMs > 0L || spec.trimEndMs > 0L) {
@@ -221,6 +272,13 @@ object MediaEditor {
 
                     val handler = Handler(Looper.getMainLooper())
                     val transformer = Transformer.Builder(context)
+                        .apply {
+                            // Older codecs (MPEG-4 part 2, H.263, VP8...) mostly have no encoder on phones;
+                            // those videos are written as H.264 instead of failing.
+                            if (videoCodec(context, item.uri) !in setOf(MimeTypes.VIDEO_H264, MimeTypes.VIDEO_H265)) {
+                                setVideoMimeType(MimeTypes.VIDEO_H264)
+                            }
+                        }
                         .addListener(object : Transformer.Listener {
                             override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                                 if (continuation.isActive) continuation.resume(Unit)
