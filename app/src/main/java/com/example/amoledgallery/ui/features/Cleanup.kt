@@ -3,7 +3,10 @@ package com.example.amoledgallery.ui.features
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Size
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -186,12 +189,19 @@ internal fun ScanProgress(text: String, progress: Float) {
 @Composable
 internal fun TrashBar(items: List<MediaItem>, onTrash: () -> Unit) {
     val palette = LocalAppTheme.current.palette
+    Box(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
     Column(
-        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier
+            .widthIn(max = 560.dp)
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+            .background(palette.surface.copy(alpha = 0.96f))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(F.selectedFrees(items.size, readableSize(items.sumOf { it.size })), color = palette.textMuted, fontSize = 13.sp)
         ThemedButton(F.moveToTrash, onClick = onTrash, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), style = DialogButtonStyle.Primary)
+    }
     }
 }
 

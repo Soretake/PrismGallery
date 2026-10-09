@@ -10,6 +10,8 @@ import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -928,7 +930,9 @@ private fun PopupMenuFrame(
                     Column(
                         modifier = popIn
                             .widthIn(min = 236.dp, max = 300.dp)
-                            .width(IntrinsicSize.Max),
+                            .width(IntrinsicSize.Max)
+                            // Long menus (and landscape) scroll instead of running off the screen.
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
                     ) {
                         entries.groupBy { it.group }.toSortedMap().values.forEach { group ->
@@ -954,6 +958,8 @@ private fun PopupMenuFrame(
                             .widthIn(min = 196.dp, max = 290.dp)
                             .width(IntrinsicSize.Max)
                             .menuSurface(shape)
+                            // Long menus (and landscape) scroll instead of running off the screen.
+                            .verticalScroll(rememberScrollState())
                             .padding(vertical = if (language == DesignLanguage.GOOGLE_EXPRESSIVE) 10.dp else 6.dp)
                     ) {
                         val anyChecked = entries.any { it.checked }
@@ -975,9 +981,11 @@ private fun PopupMenuFrame(
                 }
             }
         ) { measurables, constraints ->
-            val placeable = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
             val margin = 12.dp.roundToPx()
             val gap = 6.dp.roundToPx()
+            val placeable = measurables.first().measure(
+                constraints.copy(minWidth = 0, minHeight = 0, maxHeight = (constraints.maxHeight - 2 * margin).coerceAtLeast(0))
+            )
             val anchor = anchorBounds ?: Rect(
                 constraints.maxWidth.toFloat() - margin, 0f, constraints.maxWidth.toFloat() - margin, 0f
             )
@@ -987,6 +995,8 @@ private fun PopupMenuFrame(
             if (y + placeable.height > constraints.maxHeight - margin) {
                 y = (anchor.top.roundToInt() - placeable.height - gap).coerceAtLeast(margin)
             }
+            // Fits neither below nor above the anchor: as much of the screen as needed.
+            y = y.coerceAtMost((constraints.maxHeight - placeable.height - margin).coerceAtLeast(margin))
             layout(constraints.maxWidth, constraints.maxHeight) {
                 placeable.place(x, y)
             }

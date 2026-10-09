@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -182,10 +183,14 @@ private fun PinGate(onUnlocked: () -> Unit) {
     LaunchedEffect(Unit) { if (biometrics) authenticate(context, onUnlocked) }
 
     FeaturePage(title = F.privateAlbum) {
+        // Scrolls, so the keypad also fits in landscape.
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 40.dp)
+                .padding(top = featureTopPadding(), bottom = featureBottomPadding()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(Icons.Rounded.Lock, null, tint = palette.accent, modifier = Modifier.size(56.dp))
             Spacer(Modifier.height(18.dp))

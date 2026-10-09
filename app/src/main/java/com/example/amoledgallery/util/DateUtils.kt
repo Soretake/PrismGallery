@@ -41,7 +41,9 @@ object DateUtils {
         for (item in items) {
             calendar.timeInMillis = item.date * 1000L
             val year = calendar.get(Calendar.YEAR)
-            val key = if (columnCount >= 4) {
+            val key = if (columnCount >= 6) {
+                year
+            } else if (columnCount >= 4) {
                 year * 100 + calendar.get(Calendar.MONTH)
             } else {
                 year * 1000 + calendar.get(Calendar.DAY_OF_YEAR)
@@ -69,6 +71,11 @@ object DateUtils {
         val itemCalendar = Calendar.getInstance().apply { timeInMillis = itemMillis }
         val nowCalendar = Calendar.getInstance()
         val locale = LanguageState.locale
+
+        // Zoomed all the way out (6-7 columns): the year
+        if (columnCount >= 6) {
+            return itemCalendar.get(Calendar.YEAR).toString()
+        }
 
         // Zoomed out (4-5 columns): Month & Year
         if (columnCount >= 4) {

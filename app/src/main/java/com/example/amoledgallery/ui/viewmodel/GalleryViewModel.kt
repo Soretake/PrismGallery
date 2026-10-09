@@ -430,7 +430,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun applyFilter() {
-        val raw = _rawMedia.value
+        val raw = _rawMedia.value.let { media ->
+            if (cameraOnly.value) {
+                media.filter { it.relativePath.startsWith("DCIM/", ignoreCase = true) && !it.relativePath.contains("screenshot", ignoreCase = true) }
+            } else {
+                media
+            }
+        }
 
         val filtered = filterMediaList(raw, _selectedFilter.value)
         _uiState.value = if (filtered.isEmpty()) {
@@ -873,10 +879,25 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun zoomOut() {
-        // Pinching in -> more columns (smaller tiles)
-        if (_columnCount.value < 5) {
+        // Pinching in -> more columns (smaller tiles); 6 and 7 columns are the year view.
+        if (_columnCount.value < 7) {
             _columnCount.value += 1
         }
+    }
+
+    /** Jumps straight to a zoom level: 3 = days, 5 = months, 7 = years. */
+    fun setColumnCount(columns: Int) {
+        _columnCount.value = columns.coerceIn(2, 7)
+    }
+
+    /** Photos tab shows only what the camera took (DCIM, without screenshots), as Xiaomi's gallery can. */
+    private val viewPrefs = application.getSharedPreferences("amoled_gallery_view_prefs", Context.MODE_PRIVATE)
+    val cameraOnly = MutableStateFlow(viewPrefs.getBoolean("camera_only", false))
+
+    fun setCameraOnly(on: Boolean) {
+        cameraOnly.value = on
+        viewPrefs.edit().putBoolean("camera_only", on).apply()
+        applyFilter()
     }
 
     fun loadMedia() {

@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Gif
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Videocam
@@ -552,6 +554,17 @@ fun GalleryScreen(
                     }
                     add(MenuEntry(strings.largerThumbnails, icon = Icons.Rounded.ZoomIn) { onZoomIn() })
                     add(MenuEntry(strings.smallerThumbnails, icon = Icons.Rounded.ZoomOut) { onZoomOut() })
+                    // Days, months or years at a glance (pinching also moves between them).
+                    if (!isIos) {
+                        add(MenuEntry(com.example.amoledgallery.ui.i18n.F.viewDays, checked = columnCount <= 3, group = 2) { com.example.amoledgallery.ui.features.Features.env?.vm?.setColumnCount(3) })
+                        add(MenuEntry(com.example.amoledgallery.ui.i18n.F.viewMonths, checked = columnCount in 4..5, group = 2) { com.example.amoledgallery.ui.features.Features.env?.vm?.setColumnCount(5) })
+                        add(MenuEntry(com.example.amoledgallery.ui.i18n.F.viewYears, checked = columnCount >= 6, group = 2) { com.example.amoledgallery.ui.features.Features.env?.vm?.setColumnCount(7) })
+                    }
+                    val cameraOnly = com.example.amoledgallery.ui.features.Features.env?.vm?.cameraOnly?.value == true
+                    add(MenuEntry(com.example.amoledgallery.ui.i18n.F.cameraOnly, icon = Icons.Outlined.PhotoCamera, checked = cameraOnly, group = 3) { com.example.amoledgallery.ui.features.Features.env?.vm?.setCameraOnly(!cameraOnly) })
+                    add(MenuEntry(com.example.amoledgallery.ui.i18n.F.search, icon = Icons.Outlined.Search, group = 3) {
+                        com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.Search)
+                    })
                     if (onFilterSelected != null && language == DesignLanguage.XIAOMI_HYPEROS) {
                         MediaFilter.entries.forEach { filter ->
                             val icon = when (filter) {

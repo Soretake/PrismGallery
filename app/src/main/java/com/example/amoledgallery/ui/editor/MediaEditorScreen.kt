@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -322,12 +323,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 }
             }
 
+            // Landscape: the tools beside the photo instead of below it, so the photo keeps its size.
+            val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+                android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            val previewArea: @Composable (Modifier) -> Unit = { areaModifier ->
             // Preview with crop frame, drawings and texts
             BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp, vertical = 20.dp),
+                modifier = areaModifier.padding(horizontal = 28.dp, vertical = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val image = preview
@@ -458,6 +460,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 }
             }
 
+            }
+            val toolPanel: @Composable () -> Unit = {
             // The panel of the chosen tool
             val enabled = !saving && preview != null
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -584,6 +588,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 }
             }
 
+            }
+            val toolTabs: @Composable () -> Unit = {
             // Tool tabs
             Row(
                 modifier = Modifier
@@ -606,6 +612,23 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             .padding(horizontal = 16.dp, vertical = 9.dp)
                     )
                 }
+            }
+            }
+            if (landscape) {
+                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    previewArea(Modifier.weight(1f).fillMaxHeight())
+                    Column(
+                        modifier = Modifier.width(420.dp).fillMaxHeight(),
+                        verticalArrangement = Arrangement.Bottom
+                    ) {
+                        toolPanel()
+                        toolTabs()
+                    }
+                }
+            } else {
+                previewArea(Modifier.weight(1f).fillMaxWidth())
+                toolPanel()
+                toolTabs()
             }
         }
 

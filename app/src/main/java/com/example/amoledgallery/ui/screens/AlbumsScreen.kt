@@ -1,5 +1,6 @@
 package com.example.amoledgallery.ui.screens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.amoledgallery.ui.features.pullToOpenPrivateAlbum
 import androidx.compose.material.icons.rounded.AddToHomeScreen
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Lock
@@ -658,6 +659,8 @@ fun AlbumsScreen(
                     state = albumGridState,
                     modifier = Modifier
                         .fillMaxSize()
+                        // HyperOS: pulling the album list down opens the private album.
+                        .pullToOpenPrivateAlbum(language == DesignLanguage.XIAOMI_HYPEROS && !isInsideAlbum && !albumSearchOpen)
                         // One detector for both pages that decides on every pinch: inside an album it sizes the
                         // photos, on the album list the albums (not on iOS).
                         .detectPinchToZoomGrid(
