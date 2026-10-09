@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -137,10 +138,15 @@ private fun ActiveVideoPlayer(
     /** Paused with the button: then it stays paused, also after coming back to the app. */
     var pausedByUser by remember { mutableStateOf(false) }
 
+    var speed by remember { mutableStateOf(VideoSettings.speed) }
+    var looping by remember { mutableStateOf(VideoSettings.loop) }
+    var muted by remember { mutableStateOf(VideoSettings.muted) }
     val exoPlayer = remember(item.uri) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(Media3Item.fromUri(item.uri))
-            repeatMode = Player.REPEAT_MODE_ONE
+            repeatMode = if (VideoSettings.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            setPlaybackSpeed(VideoSettings.speed)
+            volume = if (VideoSettings.muted) 0f else 1f
             // Opening a video in the viewer plays it straight away.
             playWhenReady = true
             prepare()
@@ -198,9 +204,18 @@ private fun ActiveVideoPlayer(
     LaunchedEffect(isPlaying, isScrubbing) {
         while (isActive && isPlaying && !isScrubbing) {
             currentPositionMs = exoPlayer.currentPosition
+            com.example.amoledgallery.ui.features.ViewerState.videoPositionMs = currentPositionMs
             delay(150)
         }
+        com.example.amoledgallery.ui.features.ViewerState.videoPositionMs = exoPlayer.currentPosition
     }
+    // Speed, loop and sound stay as chosen for the next video too.
+    LaunchedEffect(speed) { exoPlayer.setPlaybackSpeed(speed); VideoSettings.speed = speed }
+    LaunchedEffect(looping) {
+        exoPlayer.repeatMode = if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        VideoSettings.loop = looping
+    }
+    LaunchedEffect(muted) { exoPlayer.volume = if (muted) 0f else 1f; VideoSettings.muted = muted }
 
     Box(
         modifier = modifier
@@ -290,6 +305,19 @@ private fun ActiveVideoPlayer(
                         .navigationBarsPadding()
                         .padding(horizontal = 20.dp)
                 ) {
+                    // Speed, loop and sound.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        VideoChip(if (speed == 1f) "1×" else "${speed}×".replace(".0×", "×")) {
+                            val speeds = listOf(0.25f, 0.5f, 1f, 1.5f, 2f)
+                            speed = speeds[(speeds.indexOf(speed) + 1) % speeds.size]
+                        }
+                        VideoChip(if (looping) "↻ ${com.example.amoledgallery.ui.i18n.F.loop}" else "${com.example.amoledgallery.ui.i18n.F.loop}: ${com.example.amoledgallery.ui.i18n.F.off}") { looping = !looping }
+                        VideoChip(if (muted) com.example.amoledgallery.ui.i18n.F.unmute else com.example.amoledgallery.ui.i18n.F.mute) { muted = !muted }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -334,6 +362,28 @@ private fun ActiveVideoPlayer(
             }
         }
     }
+}
+
+/** Speed, loop and sound of the viewer's video player, kept while the app runs. */
+object VideoSettings {
+    var speed = 1f
+    var loop = true
+    var muted = false
+}
+
+@Composable
+private fun VideoChip(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = PureWhite,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.45f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    )
 }
 
 private fun formatTimestamp(ms: Long): String {

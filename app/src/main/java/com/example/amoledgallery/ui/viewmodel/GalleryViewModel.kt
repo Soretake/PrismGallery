@@ -154,8 +154,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     )
 
     // Root-level albums (not contained within another album folder), in the chosen order
-    val rootAlbums: StateFlow<List<AlbumItem>> = combine(_albumsState, _albumSort, _albumOrder) { albums, sort, order ->
-        sortAlbums(repository.getRootAlbums(albums), sort, order)
+    // Albums tucked away under "Other albums" or put into a group are not listed among the main albums.
+    val rootAlbums: StateFlow<List<AlbumItem>> = combine(
+        _albumsState, _albumSort, _albumOrder,
+        com.example.amoledgallery.ui.features.AlbumExtras.otherIds,
+        com.example.amoledgallery.ui.features.AlbumExtras.groups
+    ) { albums, sort, order, other, groups ->
+        val tucked = com.example.amoledgallery.ui.features.AlbumExtras.hiddenFromMain(other, groups)
+        sortAlbums(repository.getRootAlbums(albums), sort, order).filterNot { it.bucketId in tucked }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun setAlbumSort(sort: AlbumSort) {
@@ -340,6 +346,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
+        com.example.amoledgallery.ui.features.AlbumExtras.init(application)
         loadFavorites()
         ThumbnailManager.getInstance(application).quality = _graphicsQuality.value
 
@@ -914,6 +921,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 ThumbnailManager.getInstance(getApplication()).startPreindexing(visibleMedia)
             }
             applyFilter()
+            openPendingAlbum()
             _selectedAlbum.value?.let { active ->
                 _currentSubAlbums.value = withContext(Dispatchers.IO) { repository.getSubAlbums(active, _albumsState.value) }
             }
@@ -1064,6 +1072,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      */
     /** The user declined a write, trash or delete request: nothing of it may carry over to the next one. */
     fun onIntentSenderCancelled() {
+        pendingWriteAction = null
+        pendingCancelAction?.let { cancel -> viewModelScope.launch(Dispatchers.IO) { cancel() } }
+        pendingCancelAction = null
         pendingRename = null
         pendingMove = null
         pendingAlbumRename = null
@@ -1073,6 +1084,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun onIntentSenderSuccess() {
         viewModelScope.launch {
+            pendingWriteAction?.let { action ->
+                pendingWriteAction = null
+                pendingCancelAction = null
+                try {
+                    withContext(Dispatchers.IO) { action() }
+                } catch (e: Exception) {
+                    _userMessage.emit(com.example.amoledgallery.ui.i18n.F.failed)
+                }
+                kotlinx.coroutines.delay(300)
+                refreshAfterEdit()
+                loadTrash()
+                return@launch
+            }
             val rename = pendingRename
             val move = pendingMove
             val albumRename = pendingAlbumRename
@@ -1351,6 +1375,126 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      */
     fun rescanMediaFolders() {
         viewModelScope.launch(Dispatchers.IO) { repository.rescanMediaFolders() }
+    }
+
+    // ---- 1.2 features: hooks for the tools in ui/features ---------------------------------------------
+
+    /** Every visible photo and video, unfiltered (the tools search and group these). */
+    val rawMedia: StateFlow<List<MediaItem>> = _rawMedia.asStateFlow()
+
+    /** Shows [text] the way every other confirmation is shown. */
+    fun message(text: String) {
+        viewModelScope.launch { _userMessage.emit(text) }
+    }
+
+    /** A write that failed for lack of access, retried once the user has allowed it. */
+    private var pendingWriteAction: (suspend () -> Unit)? = null
+
+    /** Undoes the preparation of [pendingWriteAction] when the user declines it. */
+    private var pendingCancelAction: (() -> Unit)? = null
+
+    /**
+     * Runs [action], which changes the files of [items] (their EXIF date or location, say). Files of other apps
+     * may only be written after the user's consent: the first attempt then fails with a SecurityException,
+     * Android's "Allow ... to modify" dialog is shown and the action runs again once it was allowed.
+     */
+    fun runWithWriteAccess(items: List<MediaItem>, action: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { action() }
+                refreshAfterEdit()
+            } catch (e: SecurityException) {
+                val request = when {
+                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R ->
+                        android.provider.MediaStore.createWriteRequest(
+                            getApplication<Application>().contentResolver, items.map { it.uri }
+                        )
+                    e is android.app.RecoverableSecurityException -> e.userAction.actionIntent
+                    else -> null
+                }
+                if (request != null) {
+                    pendingWriteAction = action
+                    _pendingIntentSender.emit(request)
+                } else {
+                    _userMessage.emit(com.example.amoledgallery.ui.i18n.F.failed)
+                }
+            } catch (e: Exception) {
+                _userMessage.emit(com.example.amoledgallery.ui.i18n.F.failed)
+            }
+        }
+    }
+
+    /** Moves [items] to the trash (asking first where Android wants that). */
+    fun trashItems(items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            val pendingIntent = withContext(Dispatchers.IO) { repository.createTrashRequest(items.map { it.uri }, trash = true) }
+            if (pendingIntent != null) {
+                _pendingIntentSender.emit(pendingIntent)
+            } else {
+                _userMessage.emit(strings.movedToTrash(items.size))
+                loadMedia()
+                loadTrash()
+            }
+        }
+    }
+
+    /** Asks Android to delete [items] for good (used once a copy of them exists elsewhere). */
+    fun deleteItemsForGood(items: List<MediaItem>, onDone: () -> Unit = {}, onCancelled: () -> Unit = {}) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            val pendingIntent = withContext(Dispatchers.IO) { repository.createDeleteRequest(items.map { it.uri }) }
+            if (pendingIntent != null) {
+                pendingWriteAction = { onDone() }
+                pendingCancelAction = onCancelled
+                _pendingIntentSender.emit(pendingIntent)
+            } else {
+                withContext(Dispatchers.IO) { repository.deleteMedia(items) }
+                onDone()
+                loadMedia()
+            }
+        }
+    }
+
+    /** An album a home-screen shortcut asked for; opened as soon as the albums are known. */
+    private var albumToOpen: String? = null
+
+    fun openAlbumWhenLoaded(bucketId: String) {
+        albumToOpen = bucketId
+        openPendingAlbum()
+    }
+
+    private fun openPendingAlbum() {
+        val bucket = albumToOpen ?: return
+        val album = _albumsState.value.firstOrNull { it.bucketId == bucket } ?: return
+        albumToOpen = null
+        com.example.amoledgallery.ui.features.Features.screens.clear()
+        _selectedItemIndex.value = null
+        selectTab(GalleryTab.ALBEN)
+        jumpToAlbum(album)
+    }
+
+    /** MediaStore volume of the SD card or USB drive "move to" would use, or null. */
+    val externalVolumeName: String? get() = repository.externalTarget()?.mediaStoreName
+
+    /** Copies [items] into [target]; the originals stay where they are. */
+    fun copyItems(items: List<MediaItem>, target: AlbumItem) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            moveProgress.value = MoveProgress(isMoving = true, current = 0, total = items.size)
+            val volume = if (target.isSdCard) externalVolumeName else null
+            var copied = 0
+            withContext(Dispatchers.IO) {
+                items.forEachIndexed { index, item ->
+                    if (com.example.amoledgallery.ui.features.MediaOps.copyTo(getApplication(), item, target.relativePath, volume) != null) copied++
+                    moveProgress.value = moveProgress.value.copy(current = index + 1)
+                }
+            }
+            moveProgress.value = MoveProgress()
+            _userMessage.emit(com.example.amoledgallery.ui.i18n.F.copiedItems(copied, target.name))
+            clearSelection()
+            refreshAfterEdit()
+        }
     }
 
     override fun onCleared() {

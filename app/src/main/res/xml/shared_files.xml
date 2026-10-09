@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the temporary copies prepared for sharing or printing, and the private album's files (to view and
+     share them on the user's request), are handed out - each one by an explicit, temporary grant. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+    <files-path name="private" path="private/" />
+</paths>

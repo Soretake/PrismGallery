@@ -64,8 +64,26 @@ data class EditSpec(
     val rotation: Int,
     val flipHorizontal: Boolean,
     val flipVertical: Boolean,
-    val crop: NormalizedRect
-)
+    val crop: NormalizedRect,
+    /** Colour adjustments and filter (photos; brightness, contrast, saturation and mono also for videos). */
+    val looks: Looks = Looks(),
+    /** Drawings and texts (photos only). */
+    val marks: List<Mark> = emptyList(),
+    /** Repeated diagonally over the photo (photos only). */
+    val watermark: String? = null,
+    /** Videos: the part kept; [trimEndMs] 0 means up to the end. */
+    val trimStartMs: Long = 0L,
+    val trimEndMs: Long = 0L,
+    /** Videos: the height the export is scaled down to (0 = keep). */
+    val maxVideoHeight: Int = 0
+) {
+    val isTransformed: Boolean
+        get() = rotation % 360 != 0 || flipHorizontal || flipVertical || !crop.isFull
+
+    val hasChanges: Boolean
+        get() = isTransformed || !looks.isNeutral || marks.isNotEmpty() || !watermark.isNullOrBlank() ||
+            trimStartMs > 0L || trimEndMs > 0L || maxVideoHeight > 0
+}
 
 /** Loading previews and exporting edited copies of images and videos. */
 object MediaEditor {
@@ -131,12 +149,7 @@ object MediaEditor {
     suspend fun saveImage(context: Context, item: MediaItem, spec: EditSpec): Uri = withContext(Dispatchers.IO) {
         val decoded = decodeImage(context, item.uri, MAX_EXPORT_SIDE)
         val transformed = transform(decoded, spec.rotation, spec.flipHorizontal, spec.flipVertical)
-        val crop = spec.crop
-        val x = (crop.left * transformed.width).roundToInt().coerceIn(0, transformed.width - 1)
-        val y = (crop.top * transformed.height).roundToInt().coerceIn(0, transformed.height - 1)
-        val width = ((crop.right - crop.left) * transformed.width).roundToInt().coerceIn(1, transformed.width - x)
-        val height = ((crop.bottom - crop.top) * transformed.height).roundToInt().coerceIn(1, transformed.height - y)
-        val result = if (crop.isFull) transformed else Bitmap.createBitmap(transformed, x, y, width, height)
+        val result = EditRenderer.render(transformed, spec)
 
         val mime = item.mimeType.lowercase()
         val (format, extension, outMime) = when {
@@ -188,7 +201,21 @@ object MediaEditor {
                         // Normalized device coordinates: x and y in -1..1, y pointing up.
                         effects += Crop(2f * c.left - 1f, 2f * c.right - 1f, 1f - 2f * c.bottom, 1f - 2f * c.top)
                     }
-                    val edited = EditedMediaItem.Builder(ExoMediaItem.fromUri(item.uri))
+                    videoLookEffects(spec.looks, effects)
+                    if (spec.maxVideoHeight > 0) {
+                        effects += androidx.media3.effect.Presentation.createForHeight(spec.maxVideoHeight)
+                    }
+                    val mediaItem = ExoMediaItem.Builder().setUri(item.uri).apply {
+                        if (spec.trimStartMs > 0L || spec.trimEndMs > 0L) {
+                            setClippingConfiguration(
+                                ExoMediaItem.ClippingConfiguration.Builder()
+                                    .setStartPositionMs(spec.trimStartMs)
+                                    .apply { if (spec.trimEndMs > 0L) setEndPositionMs(spec.trimEndMs) }
+                                    .build()
+                            )
+                        }
+                    }.build()
+                    val edited = EditedMediaItem.Builder(mediaItem)
                         .setEffects(Effects(emptyList(), effects))
                         .build()
 
@@ -262,6 +289,19 @@ object MediaEditor {
         }.getOrNull()
         return fromRow?.takeIf { it.isNotBlank() && it != MediaStore.VOLUME_EXTERNAL }
             ?: MediaStore.VOLUME_EXTERNAL_PRIMARY
+    }
+
+    /** The colour adjustments Media3 can apply to a video: brightness, contrast, saturation and black & white. */
+    private fun videoLookEffects(looks: Looks, effects: MutableList<Effect>) {
+        if (looks.isNeutral) return
+        val mono = looks.filter == PhotoFilter.MONO || looks.filter == PhotoFilter.NOIR
+        if (looks.brightness != 0f) effects += androidx.media3.effect.Brightness(looks.brightness.coerceIn(-1f, 1f) * 0.35f)
+        if (looks.contrast != 0f) effects += androidx.media3.effect.Contrast(looks.contrast.coerceIn(-1f, 1f) * 0.6f)
+        if (mono) {
+            effects += androidx.media3.effect.RgbFilter.createGrayscaleFilter()
+        } else if (looks.saturation != 0f) {
+            effects += androidx.media3.effect.HslAdjustment.Builder().adjustSaturation(looks.saturation.coerceIn(-1f, 1f) * 100f).build()
+        }
     }
 
     /** Original details the edited copy keeps, so it stays next to the original in the timeline and on the map. */

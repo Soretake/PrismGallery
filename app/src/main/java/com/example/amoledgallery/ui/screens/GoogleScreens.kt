@@ -1,5 +1,7 @@
 package com.example.amoledgallery.ui.screens
 
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -143,6 +145,8 @@ internal fun GoogleMenuContent(
         DrawerRow(Icons.Outlined.FavoriteBorder, strings.favorites, "$favoriteCount", onOpenFavorites)
         DrawerRow(Icons.Outlined.Delete, strings.trash, "$trashedCount", onOpenTrash)
         DrawerRow(Icons.Outlined.ContentCopy, strings.duplicates, null, onOpenDuplicates)
+        DrawerRow(Icons.Outlined.Build, com.example.amoledgallery.ui.i18n.F.tools, null) { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.Tools) }
+        DrawerRow(Icons.Outlined.Lock, com.example.amoledgallery.ui.i18n.F.privateAlbum, null) { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.PrivateAlbum) }
         Spacer(modifier = Modifier.height(14.dp))
         SectionLabel("App")
         DrawerRow(Icons.Outlined.Palette, strings.appearance, null, onOpenDesign)

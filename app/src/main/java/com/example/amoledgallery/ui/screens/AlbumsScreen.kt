@@ -1,4 +1,10 @@
 package com.example.amoledgallery.ui.screens
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material.icons.rounded.AddToHomeScreen
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Collections
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import com.example.amoledgallery.ui.i18n.strings
 
 import androidx.activity.compose.BackHandler
@@ -456,6 +462,10 @@ fun AlbumsScreen(
         albums
     }
     val selectedAlbums = shownAlbums.filter { it.bucketId in selectedAlbumIds }
+    val extraGroups by com.example.amoledgallery.ui.features.AlbumExtras.groups.collectAsStateWithLifecycle()
+    val extraOtherIds by com.example.amoledgallery.ui.features.AlbumExtras.otherIds.collectAsStateWithLifecycle()
+    var albumToGroup by remember { mutableStateOf<AlbumItem?>(null) }
+    val albumContext = androidx.compose.ui.platform.LocalContext.current
     /** Leaves album selection, forgetting what was ticked. */
     val exitAlbumSelection: () -> Unit = {
         albumSelectMode = false
@@ -853,7 +863,12 @@ fun AlbumsScreen(
                             }
                         }
 
-                        items(shownAlbums, key = { it.bucketId }) { album ->
+                        val albumListView = com.example.amoledgallery.ui.features.AlbumExtras.listView
+                        items(
+                            shownAlbums,
+                            key = { it.bucketId },
+                            span = { GridItemSpan(if (albumListView) maxLineSpan else 1) }
+                        ) { album ->
                             val dragged = album.bucketId == draggedKey
                             val tileModifier = if (dragged) {
                                 // Follows the finger, lifted a little above the others.
@@ -873,6 +888,7 @@ fun AlbumsScreen(
                             }
                             Box(modifier = tileModifier) {
                             AlbumTile(
+                                listRow = albumListView,
                                 album = album,
                                 // The release that ends a hold (picked up to drag) is not a tap: the grid handles it.
                                 onClick = {
@@ -904,6 +920,36 @@ fun AlbumsScreen(
                                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                                 )
                             }
+                            }
+                        }
+
+                        // Album groups (One UI) and the albums tucked away under "Other albums" (HyperOS), after the
+                        // main albums. Not while searching or picking albums.
+                        if (albumSearchTerm == null && !albumSelectMode && storageFilter == null) {
+                            val extraTiles = buildList<Pair<AlbumItem, com.example.amoledgallery.ui.features.FeatureScreen>> {
+                                extraGroups.forEach { (name, ids) ->
+                                    val groupAlbums = ids.mapNotNull { id -> allAlbumsFlat.firstOrNull { it.bucketId == id } }
+                                    if (groupAlbums.isNotEmpty()) {
+                                        add(com.example.amoledgallery.ui.features.AlbumExtras.groupTile(name, groupAlbums) to com.example.amoledgallery.ui.features.FeatureScreen.AlbumGroup(name))
+                                    }
+                                }
+                                val others = allAlbumsFlat.filter { it.bucketId in extraOtherIds }
+                                if (others.isNotEmpty()) {
+                                    add(com.example.amoledgallery.ui.features.AlbumExtras.otherTile(others) to com.example.amoledgallery.ui.features.FeatureScreen.OtherAlbums)
+                                }
+                            }
+                            items(
+                                extraTiles,
+                                key = { it.first.bucketId },
+                                span = { GridItemSpan(if (albumListView) maxLineSpan else 1) }
+                            ) { (tile, screen) ->
+                                AlbumTile(
+                                    listRow = albumListView,
+                                    album = tile,
+                                    onClick = { com.example.amoledgallery.ui.features.Features.open(screen) },
+                                    onLongClick = null,
+                                    compact = rootColumns >= 4
+                                )
                             }
                         }
 
@@ -1336,6 +1382,16 @@ fun AlbumsScreen(
                 add(MenuEntry(strings.showAlbums, icon = Icons.Rounded.Storage) { showStorageMenu = true })
             }
             add(MenuEntry(strings.hiddenAlbums, icon = Icons.Rounded.VisibilityOff) { showManageHiddenDialog = true })
+            add(MenuEntry(
+                if (com.example.amoledgallery.ui.features.AlbumExtras.listView) com.example.amoledgallery.ui.i18n.F.gridView else com.example.amoledgallery.ui.i18n.F.listView,
+                icon = if (com.example.amoledgallery.ui.features.AlbumExtras.listView) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList
+            ) { com.example.amoledgallery.ui.features.AlbumExtras.toggleListView() })
+            add(MenuEntry(com.example.amoledgallery.ui.i18n.F.otherAlbums, icon = Icons.Rounded.Collections) {
+                com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.OtherAlbums)
+            })
+            add(MenuEntry(com.example.amoledgallery.ui.i18n.F.privateAlbum, icon = Icons.Rounded.Lock) {
+                com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.PrivateAlbum)
+            })
         }
     )
 
@@ -1399,6 +1455,10 @@ fun AlbumsScreen(
         }
     )
 
+    albumToGroup?.let { album ->
+        com.example.amoledgallery.ui.features.AddToGroupSheet(album, onDismiss = { albumToGroup = null })
+    }
+
     // Album actions: a popup anchored on the tile for One UI / iOS, an action sheet elsewhere.
     contextMenuAlbum?.let { album ->
         val canMigrate = album.isSdCard || isSdCardAvailable
@@ -1435,6 +1495,11 @@ fun AlbumsScreen(
                         add(MenuEntry(migrateLabel, icon = migrateIcon) { albumToMigrate = album })
                     }
                     add(MenuEntry(strings.hide, icon = Icons.Rounded.VisibilityOff) { albumToHide = album })
+                    if (canArrange) {
+                        add(MenuEntry(com.example.amoledgallery.ui.i18n.F.addToGroup, icon = Icons.Rounded.Collections) { albumToGroup = album })
+                        add(MenuEntry(com.example.amoledgallery.ui.i18n.F.moveToOtherAlbums, icon = Icons.Rounded.Inventory2) { com.example.amoledgallery.ui.features.AlbumExtras.setOther(album, true) })
+                    }
+                    add(MenuEntry(com.example.amoledgallery.ui.i18n.F.addToHomeScreen, icon = Icons.Rounded.AddToHomeScreen) { com.example.amoledgallery.ui.features.AlbumExtras.pinShortcut(albumContext, album) })
                     add(MenuEntry(strings.delete, icon = Icons.Rounded.Delete, destructive = true) { albumToDelete = album })
                 }
             )
@@ -1490,6 +1555,20 @@ fun AlbumsScreen(
                             add(ListRow(strings.hideAlbum, icon = Icons.Rounded.VisibilityOff, iconColor = Color(0xFF8E8E93), showChevron = false, onClick = {
                                 contextMenuAlbum = null
                                 albumToHide = album
+                            }))
+                            if (canArrange) {
+                                add(ListRow(com.example.amoledgallery.ui.i18n.F.addToGroup, icon = Icons.Rounded.Collections, iconColor = palette.accent, showChevron = false, onClick = {
+                                    contextMenuAlbum = null
+                                    albumToGroup = album
+                                }))
+                                add(ListRow(com.example.amoledgallery.ui.i18n.F.moveToOtherAlbums, icon = Icons.Rounded.Inventory2, iconColor = Color(0xFF8E8E93), showChevron = false, onClick = {
+                                    contextMenuAlbum = null
+                                    com.example.amoledgallery.ui.features.AlbumExtras.setOther(album, true)
+                                }))
+                            }
+                            add(ListRow(com.example.amoledgallery.ui.i18n.F.addToHomeScreen, icon = Icons.Rounded.AddToHomeScreen, iconColor = palette.accent, showChevron = false, onClick = {
+                                contextMenuAlbum = null
+                                com.example.amoledgallery.ui.features.AlbumExtras.pinShortcut(albumContext, album)
                             }))
                             add(ListRow(strings.deleteAlbum, icon = Icons.Rounded.Delete, iconColor = palette.destructive, titleColor = palette.destructive, showChevron = false, onClick = {
                                 contextMenuAlbum = null
@@ -2189,6 +2268,8 @@ private fun AlbumSearchBar(
 @Composable
 private fun AlbumTile(
     album: AlbumItem,
+    /** One full-width row (the album tab's list view) instead of a tile. */
+    listRow: Boolean = false,
     onClick: () -> Unit,
     /** Null where the grid handles the long press itself (the album list, which arranges by dragging). */
     onLongClick: ((Rect?) -> Unit)?,
@@ -2214,6 +2295,30 @@ private fun AlbumTile(
         )
     val nameSize = if (compact) 13.sp else 15.sp
     val countSize = if (compact) 11.sp else 13.sp
+
+    if (listRow) {
+        // List view: a small cover, the name and the count, like the album lists of One UI and HyperOS.
+        val shape = RoundedCornerShape(if (language == DesignLanguage.IOS_LIQUID_GLASS) 10.dp else 14.dp)
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .then(clickModifier)
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.width(64.dp)) { AlbumCover(album, shape) }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(album.name, color = palette.onBackground, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(countText, color = palette.textMuted, fontSize = 13.sp, maxLines = 1)
+            }
+            if (album.isSdCard) {
+                Icon(Icons.Rounded.SdCard, null, tint = palette.textMuted, modifier = Modifier.size(18.dp))
+            }
+        }
+        return
+    }
 
     when (language) {
         // One UI 8: a large rounded cover with the name and count centred on the photo in white.

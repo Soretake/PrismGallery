@@ -237,6 +237,7 @@ fun MediaDetailScreen(
     }
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
+            if (com.example.amoledgallery.ui.features.ViewerState.rotationLocked) com.example.amoledgallery.ui.features.setRotationLock(hostView.context, false)
             hostView.context.findActivity()?.window?.let { window ->
                 androidx.core.view.WindowCompat.getInsetsController(window, hostView)
                     .show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -262,6 +263,27 @@ fun MediaDetailScreen(
 
     val currentItem = mediaList.getOrNull(pagerState.currentPage) ?: mediaList[0]
     val isFav = isFavorite(currentItem.id)
+
+    // Motion photos: the short video inside the photo, played on request.
+    var isMotion by remember(currentItem.id) { mutableStateOf(false) }
+    var motionFile by remember { mutableStateOf<java.io.File?>(null) }
+    androidx.compose.runtime.LaunchedEffect(currentItem.id) {
+        isMotion = !trashMode && withContext(Dispatchers.IO) { com.example.amoledgallery.ui.features.MotionPhoto.videoOffset(context, currentItem) != null }
+    }
+    // HDR photos (Ultra HDR / gain maps) are shown with their full brightness range where the screen can.
+    androidx.compose.runtime.LaunchedEffect(currentItem.id) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            hostView.context.findActivity()?.window?.colorMode =
+                if (currentItem.isImage) android.content.pm.ActivityInfo.COLOR_MODE_HDR else android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                hostView.context.findActivity()?.window?.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
+            }
+        }
+    }
     var bounceTrigger by remember { mutableStateOf(false) }
     val favScale by animateFloatAsState(
         targetValue = if (bounceTrigger) 1.3f else 1.0f,
@@ -617,6 +639,22 @@ fun MediaDetailScreen(
             DetailTopBar(language, dateTitle, timeText, lightChrome, detailHaze, actions)
         }
 
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showControls && isMotion,
+            enter = fadeIn(tween(160)),
+            exit = fadeOut(tween(160)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 74.dp)
+        ) {
+            com.example.amoledgallery.ui.features.MotionChip {
+                scope.launch {
+                    motionFile = withContext(Dispatchers.IO) { com.example.amoledgallery.ui.features.MotionPhoto.extract(context, currentItem) }
+                }
+            }
+        }
+
         val bottomBar: @Composable BoxScope.() -> Unit = {
             AnimatedVisibility(
                 // Fades with the panel through its alpha below (no visibility switch halfway, which recomposed);
@@ -736,6 +774,7 @@ fun MediaDetailScreen(
                 if (actions.showRename) {
                     add(com.example.amoledgallery.ui.design.MenuEntry(strings.rename) { showRenameDialog = true })
                 }
+                if (!trashMode && !viewOnly) addAll(com.example.amoledgallery.ui.features.viewerExtraEntries(context, currentItem, mediaList, scope, withIcons = false))
             }
         } else if (isHyperOs) {
             // HyperOS: the "More" menu above the toolbar.
@@ -744,6 +783,7 @@ fun MediaDetailScreen(
                 // Photos become the wallpaper; videos and GIFs become a live wallpaper (see the sheet).
                 add(com.example.amoledgallery.ui.design.MenuEntry(strings.setAsWallpaper) { wallpaperItem = currentItem })
                 add(com.example.amoledgallery.ui.design.MenuEntry(strings.details) { hyperInfoOpen = true })
+                if (!trashMode && !viewOnly) addAll(com.example.amoledgallery.ui.features.viewerExtraEntries(context, currentItem, mediaList, scope, withIcons = false))
             }
         } else {
             buildList {
@@ -752,6 +792,7 @@ fun MediaDetailScreen(
                 }
                 add(com.example.amoledgallery.ui.design.MenuEntry(strings.edit, icon = Icons.Outlined.Edit) { editingItem = currentItem })
                 add(com.example.amoledgallery.ui.design.MenuEntry(strings.setAsWallpaper, icon = Icons.Outlined.Wallpaper) { wallpaperItem = currentItem })
+                if (!trashMode && !viewOnly) addAll(com.example.amoledgallery.ui.features.viewerExtraEntries(context, currentItem, mediaList, scope, withIcons = true))
             }
         }
     )
@@ -823,6 +864,8 @@ fun MediaDetailScreen(
             )
         }
     }
+
+    motionFile?.let { file -> com.example.amoledgallery.ui.features.MotionPlayerOverlay(currentItem, file) { motionFile = null } }
 
     if (showRenameDialog) {
         RenameDialog(

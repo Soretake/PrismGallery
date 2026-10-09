@@ -5,4 +5,8 @@
     <!-- Shown in the system wallpaper picker for the video / GIF live wallpaper. -->
     <string name="live_wallpaper_label">Prism Gallery</string>
     <string name="live_wallpaper_description">The video or GIF you picked in Prism Gallery</string>
+    <string name="slideshow_wallpaper_label">Prism Slideshow</string>
+    <string name="slideshow_wallpaper_description">Photos of the album you picked in Prism Gallery, changing every few minutes</string>
+    <string name="photo_widget_label">Prism Photo</string>
+    <string name="photo_widget_description">A photo from your favorites that changes every hour</string>
 </resources>

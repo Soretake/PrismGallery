@@ -102,6 +102,8 @@ data class MediaMetadata(
     val flashUsed: Boolean? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    /** "Berlin, Germany": the nearest town from the bundled offline list, looked up after loading. */
+    val placeName: String? = null,
     // Video
     val durationFormatted: String? = null,
     val bitrateFormatted: String? = null,
@@ -116,6 +118,12 @@ data class MediaMetadata(
     val fullDate: String = ""
 )
 
+/** The town (when known) above the coordinates, which few people can place by themselves. */
+internal fun MediaMetadata.locationText(): String {
+    val coordinates = "${String.format(Locale.US, "%.5f", latitude)}, ${String.format(Locale.US, "%.5f", longitude)}"
+    return placeName?.let { "$it\n$coordinates" } ?: coordinates
+}
+
 /** Loads [item]'s metadata off the main thread once a page swipe has settled. */
 @Composable
 private fun rememberMediaMetadata(item: MediaItem): MediaMetadata? {
@@ -127,6 +135,13 @@ private fun rememberMediaMetadata(item: MediaItem): MediaMetadata? {
         kotlinx.coroutines.delay(200)
         val loaded = withContext(Dispatchers.IO) { extractMediaMetadata(context, item) }
         metadata = loaded
+        // The place name follows once the offline town list is loaded (the first time takes a moment).
+        if (loaded.latitude != null && loaded.longitude != null) {
+            com.example.amoledgallery.ui.features.Geo.ensureLoaded(context)
+            com.example.amoledgallery.ui.features.Geo.nearest(loaded.latitude, loaded.longitude)?.let { town ->
+                metadata = loaded.copy(placeName = town.label)
+            }
+        }
     }
     return metadata
 }
@@ -224,7 +239,7 @@ fun MediaInfoContent(
                         MetadataRow(
                             icon = Icons.Rounded.LocationOn,
                             title = strings.captureLocation,
-                            value = "${String.format(Locale.US, "%.5f", meta.latitude)}, ${String.format(Locale.US, "%.5f", meta.longitude)}",
+                            value = meta.locationText(),
                             modifier = Modifier.weight(1f)
                         )
                         Text(
@@ -403,7 +418,7 @@ private fun OneUiMediaInfoContent(item: MediaItem, onEdit: (() -> Unit)?, modifi
                 Column(modifier = Modifier.weight(1f)) {
                     Text(strings.captureLocation, color = palette.onBackground, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "${String.format(Locale.US, "%.5f", meta.latitude)}, ${String.format(Locale.US, "%.5f", meta.longitude)}",
+                        meta.locationText(),
                         color = palette.textMuted,
                         fontSize = 15.sp
                     )
@@ -515,7 +530,7 @@ private fun GoogleMediaInfoContent(item: MediaItem, modifier: Modifier) {
                         GeminiInfoRow(
                             Icons.Rounded.LocationOn,
                             strings.captureLocation,
-                            "${String.format(Locale.US, "%.5f", meta.latitude)}, ${String.format(Locale.US, "%.5f", meta.longitude)}"
+                            meta.locationText()
                         )
                     }
                     Text(
@@ -777,7 +792,7 @@ private fun IosMediaInfoContent(item: MediaItem, modifier: Modifier) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(strings.captureLocation, color = palette.onBackground, fontSize = 17.sp)
                         Text(
-                            text = "${String.format(Locale.US, "%.5f", meta.latitude)}, ${String.format(Locale.US, "%.5f", meta.longitude)}",
+                            text = meta.locationText(),
                             color = palette.textMuted,
                             fontSize = 15.sp
                         )

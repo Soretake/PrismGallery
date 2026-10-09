@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -156,6 +158,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleViewIntent(intent: Intent?) {
+        // A home-screen shortcut to an album (Albums > hold > Add to home screen).
+        if (intent?.action == com.example.amoledgallery.ui.features.AlbumExtras.ACTION_OPEN_ALBUM) {
+            intent.getStringExtra(com.example.amoledgallery.ui.features.AlbumExtras.EXTRA_BUCKET)?.let { viewModel.openAlbumWhenLoaded(it) }
+            return
+        }
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         // A camera may attach every shot of its session as ClipData, so they can be swiped through. The
@@ -286,6 +293,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
     // Whether a settings page is pushed over the menu tab.
     var settingsPageOpen by remember { mutableStateOf(false) }
     var showCreateAlbumFromMove by remember { mutableStateOf(false) }
+    var selectionMoreOpen by remember { mutableStateOf(false) }
+    var selectionBarBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
     // Permission Launcher for media storage access
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -680,7 +689,20 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                             }
                         },
                         onMove = { viewModel.openMoveSheet() },
-                        onDelete = { viewModel.trashSelectedMedia() }
+                        onDelete = { viewModel.trashSelectedMedia() },
+                        modifier = Modifier.onGloballyPositioned { selectionBarBounds = it.boundsInRoot() },
+                        onMore = { selectionMoreOpen = true }
+                    )
+                }
+                // More tools for the selection: slideshow, share options, copy, private album, paste edits.
+                val selectionScope = androidx.compose.runtime.rememberCoroutineScope()
+                if (selectionMoreOpen && isSelectionMode) {
+                    val chosen = (allItems + albumMedia).distinctBy { it.id }.filter { selectedIds.contains(it.id) }
+                    com.example.amoledgallery.ui.design.ThemedPopupMenu(
+                        expanded = true,
+                        onDismissRequest = { selectionMoreOpen = false },
+                        anchorBounds = selectionBarBounds,
+                        entries = com.example.amoledgallery.ui.features.selectionExtraEntries(context, chosen, selectionScope)
                     )
                 }
             }
@@ -791,6 +813,9 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
             }
         }
         }
+
+        // The 1.2 tools (search, places, private album, clean-up, create...) and their dialogs, over everything.
+        com.example.amoledgallery.ui.features.FeatureHost(viewModel)
     }
 
     // In-app progress dialog for media move / album migration, styled per design language.

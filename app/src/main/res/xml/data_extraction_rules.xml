@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ cloud backups and device transfers: the private album and its PIN never leave the device. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="private/" />
+        <exclude domain="sharedpref" path="prism_private_album.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="private/" />
+        <exclude domain="sharedpref" path="prism_private_album.xml" />
+    </device-transfer>
+</data-extraction-rules>

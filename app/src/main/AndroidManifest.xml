@@ -18,11 +18,16 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
+    <!-- The private album can be unlocked with a fingerprint instead of its PIN. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- Explicitly NO internet permission requested -->
 
     <application
         android:name=".AmoledGalleryApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
@@ -111,6 +116,45 @@
                 android:name="android.service.wallpaper"
                 android:resource="@xml/live_wallpaper" />
         </service>
+
+        <!-- Shows the photos of one album as a changing wallpaper (Tools > Slideshow wallpaper). -->
+        <service
+            android:name=".service.SlideshowWallpaperService"
+            android:exported="true"
+            android:label="@string/slideshow_wallpaper_label"
+            android:directBootAware="true"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/slideshow_wallpaper" />
+        </service>
+
+        <!-- Home-screen photo widget (a favorite, or a recent photo, changing every hour). -->
+        <receiver
+            android:name=".service.PhotoWidgetProvider"
+            android:exported="true"
+            android:label="@string/photo_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/photo_widget" />
+        </receiver>
+
+        <!-- Hands prepared copies (shared without location, as JPEG, smaller) to the app they are sent to. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/shared_files" />
+        </provider>
 
     </application>
 

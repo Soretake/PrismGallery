@@ -1,5 +1,7 @@
 package com.example.amoledgallery.ui.screens
 
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -221,6 +223,11 @@ internal fun OneUiMenuContent(
             IconRow(Icons.Rounded.Delete, Color(0xFFF4731F), strings.trash, strings.items(trashedCount), onOpenTrash)
             Divider(start = 78.dp)
             IconRow(Icons.Rounded.ContentCopy, Color(0xFF00A9A5), strings.duplicates, strings.duplicatesSubtitle, onOpenDuplicates)
+        }
+        Card {
+            IconRow(Icons.Rounded.Build, Color(0xFF3E7BFA), com.example.amoledgallery.ui.i18n.F.tools, com.example.amoledgallery.ui.i18n.F.toolsSubtitle) { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.Tools) }
+            Divider(start = 78.dp)
+            IconRow(Icons.Rounded.Lock, Color(0xFF7B61F0), com.example.amoledgallery.ui.i18n.F.privateAlbum, com.example.amoledgallery.ui.i18n.F.privateSubtitle) { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.PrivateAlbum) }
         }
         Card {
             IconRow(Icons.Rounded.Palette, Color(0xFF7B61F0), strings.appearance, ThemeState.designLanguage.displayName, onOpenDesign)

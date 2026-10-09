@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.AddBox
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Share
@@ -646,7 +647,9 @@ fun SelectionActionBar(
     onShare: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** More tools for the selection (slideshow, copy, private album...), in a menu. */
+    onMore: (() -> Unit)? = null
 ) {
     val theme = LocalAppTheme.current
     val palette = theme.palette
@@ -670,6 +673,7 @@ fun SelectionActionBar(
                 LabeledAction(Icons.Outlined.Share, strings.send, enabled, palette.onBackground, Modifier.width(92.dp), onShare)
                 LabeledAction(Icons.AutoMirrored.Rounded.DriveFileMove, strings.move, enabled, palette.onBackground, Modifier.width(92.dp), onMove)
                 LabeledAction(Icons.Outlined.Delete, strings.delete, enabled, palette.onBackground, Modifier.width(92.dp), onDelete)
+                if (onMore != null) LabeledAction(Icons.Outlined.MoreVert, strings.moreActions, enabled, palette.onBackground, Modifier.width(80.dp), onMore)
             }
         }
 
@@ -690,6 +694,7 @@ fun SelectionActionBar(
                 LabeledAction(Icons.Outlined.Share, strings.share, enabled, palette.onBackground, Modifier.width(88.dp), onShare)
                 LabeledAction(Icons.AutoMirrored.Rounded.DriveFileMove, strings.move, enabled, palette.onBackground, Modifier.width(88.dp), onMove)
                 LabeledAction(Icons.Outlined.Delete, strings.delete, enabled, palette.onBackground, Modifier.width(88.dp), onDelete)
+                if (onMore != null) LabeledAction(Icons.Outlined.MoreVert, strings.moreActions, enabled, palette.onBackground, Modifier.width(76.dp), onMore)
             }
         }
 
@@ -708,6 +713,8 @@ fun SelectionActionBar(
                 modifier = Modifier
                     .height(56.dp)
                     .glass(RoundedCornerShape(percent = 50))
+                    // iOS: the count capsule opens the further actions.
+                    .then(if (onMore != null && enabled) Modifier.clickable(onClick = onMore) else Modifier)
                     .padding(horizontal = 28.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -745,6 +752,7 @@ fun SelectionActionBar(
                 LabeledAction(Icons.AutoMirrored.Outlined.OpenInNew, strings.send, enabled, tint, Modifier.weight(1f), onShare)
                 LabeledAction(Icons.Outlined.AddBox, strings.move, enabled, tint, Modifier.weight(1f), onMove)
                 LabeledAction(Icons.Outlined.Delete, strings.delete, enabled, tint, Modifier.weight(1f), onDelete)
+                if (onMore != null) LabeledAction(Icons.Outlined.MoreVert, strings.moreActions, enabled, tint, Modifier.weight(1f), onMore)
             }
         }
     }

@@ -1,5 +1,7 @@
 package com.example.amoledgallery.ui.screens
 
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -237,6 +239,8 @@ internal fun HyperOsMenuContent(
         HyperOsIconRow(Icons.Rounded.Favorite, Color(0xFFFF5C7A), strings.favorites, value = "$favoriteCount", onClick = onOpenFavorites)
         HyperOsIconRow(Icons.Rounded.Delete, palette.accent, strings.recentlyDeleted, value = "$trashedCount", onClick = onOpenTrash)
         HyperOsIconRow(Icons.Rounded.ContentCopy, Color(0xFF00A9A5), strings.duplicates, onClick = onOpenDuplicates)
+        HyperOsIconRow(Icons.Rounded.Build, Color(0xFF3E7BFA), com.example.amoledgallery.ui.i18n.F.tools, onClick = { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.Tools) })
+        HyperOsIconRow(Icons.Rounded.Lock, Color(0xFF7B61F0), com.example.amoledgallery.ui.i18n.F.privateAlbum, onClick = { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.PrivateAlbum) })
         HyperOsIconRow(Icons.Rounded.Storage, Color(0xFF8A90A6), strings.storage, value = storageValue, onClick = onOpenStorage)
         HyperOsDivider(Modifier.padding(horizontal = 28.dp, vertical = 16.dp))
         HyperOsSectionLabel("App", Modifier.padding(start = 28.dp, end = 28.dp, bottom = 6.dp))

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 6-11 backups: the private album and its PIN never leave the device. -->
+<full-backup-content>
+    <exclude domain="file" path="private/" />
+    <exclude domain="sharedpref" path="prism_private_album.xml" />
+</full-backup-content>

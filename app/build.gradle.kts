@@ -116,6 +116,9 @@ dependencies {
     // ExifInterface for reading image camera metadata
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
+    // Printing photos through Android's print service
+    implementation("androidx.print:print:1.0.0")
+
     // Installs the baseline profile bundled in src/main/baseline-prof.txt so ART AOT-compiles the
     // scroll/startup hot paths. Without it a sideloaded APK installs with compiler filter "verify"
     // and runs fully interpreted - which was measured to be the dominant cause of scroll jank.

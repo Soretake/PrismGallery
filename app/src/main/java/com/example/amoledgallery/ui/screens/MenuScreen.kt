@@ -1,4 +1,6 @@
 package com.example.amoledgallery.ui.screens
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Build
 import com.example.amoledgallery.ui.i18n.AppLanguage
 import com.example.amoledgallery.ui.i18n.LanguageState
 import com.example.amoledgallery.ui.i18n.strings
@@ -291,6 +293,12 @@ fun MenuScreen(
                                     ListRow(strings.favorites, icon = Icons.Rounded.Favorite, value = "$favoriteCount", onClick = onOpenFavorites),
                                     ListRow(strings.recentlyDeleted, icon = Icons.Rounded.Delete, value = "$trashedCount", onClick = onOpenTrash),
                                     ListRow(strings.duplicates, icon = Icons.Rounded.ContentCopy, onClick = onOpenDuplicates)
+                                )
+                            )
+                            ThemedListSection(
+                                rows = listOf(
+                                    ListRow(com.example.amoledgallery.ui.i18n.F.tools, icon = Icons.Rounded.Build, onClick = { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.Tools) }),
+                                    ListRow(com.example.amoledgallery.ui.i18n.F.privateAlbum, icon = Icons.Rounded.Lock, onClick = { com.example.amoledgallery.ui.features.Features.open(com.example.amoledgallery.ui.features.FeatureScreen.PrivateAlbum) })
                                 )
                             )
                             ThemedListSection(
