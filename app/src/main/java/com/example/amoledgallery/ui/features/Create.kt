@@ -167,14 +167,16 @@ private fun CollageOptions(items: List<MediaItem>, onBack: () -> Unit) {
     val context = LocalContext.current
     val env = LocalFeatureEnv.current
     val scope = rememberCoroutineScope()
-    val layouts = remember(items.size) { collageLayouts(items.size) }
-    var layoutIndex by remember { mutableIntStateOf(0) }
     var gap by remember { mutableIntStateOf(1) }
     var white by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     val sources by androidx.compose.runtime.produceState<List<Bitmap>?>(null, items) {
         value = withContext(Dispatchers.IO) { items.mapNotNull { runCatching { MediaOps.decode(context, it.uri, 1400) }.getOrNull() } }
     }
+    // Laid out for the photos that could be read: a damaged file used to leave its cell empty.
+    val cellCount = (sources?.size ?: items.size).coerceIn(2, 6)
+    val layouts = remember(cellCount) { collageLayouts(cellCount) }
+    var layoutIndex by remember(cellCount) { mutableIntStateOf(0) }
     val gapFraction = listOf(0f, 0.012f, 0.03f)[gap]
     val preview by androidx.compose.runtime.produceState<Bitmap?>(null, sources, layoutIndex, gap, white) {
         val src = sources ?: return@produceState

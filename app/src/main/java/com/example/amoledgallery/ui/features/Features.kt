@@ -352,7 +352,14 @@ fun FeatureBadge(text: String, modifier: Modifier = Modifier) {
 /** A simple page of photos (a place, a search result set). */
 @Composable
 fun MediaListPage(title: String, items: List<MediaItem>) {
-    FeaturePage(title = title, subtitle = com.example.amoledgallery.ui.i18n.strings.items(items.size)) {
-        MediaSectionGrid(listOf(MediaSection(null, items)))
+    // The list was made when the page opened. Seen through the library as it is now, a photo deleted or renamed
+    // from here leaves the page (or shows its new name) instead of staying behind as an empty tile.
+    val media by LocalFeatureEnv.current.vm.rawMedia.collectAsStateWithLifecycle()
+    val live = remember(items, media) {
+        val byId = media.associateBy { it.id }
+        items.mapNotNull { byId[it.id] }
+    }
+    FeaturePage(title = title, subtitle = com.example.amoledgallery.ui.i18n.strings.items(live.size)) {
+        MediaSectionGrid(listOf(MediaSection(null, live)))
     }
 }

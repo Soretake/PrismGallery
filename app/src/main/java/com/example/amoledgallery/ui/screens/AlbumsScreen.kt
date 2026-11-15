@@ -682,10 +682,15 @@ fun AlbumsScreen(
                                     val albumKeys = albums.map { it.bucketId }.toSet()
                                     var startPointer = Offset.Zero
                                     var moved = false
-                                    fun albumAt(pos: Offset) = albumGridState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                        info.key in albumKeys &&
-                                            pos.x >= info.offset.x && pos.x <= info.offset.x + info.size.width &&
-                                            pos.y >= info.offset.y && pos.y <= info.offset.y + info.size.height
+                                    // Item offsets start below the list's top padding (the viewport starts at minus that
+                                    // padding); without it a hold landed on the album one row further down, or on none.
+                                    fun albumAt(pos: Offset): androidx.compose.foundation.lazy.grid.LazyGridItemInfo? {
+                                        val y = pos.y + albumGridState.layoutInfo.viewportStartOffset
+                                        return albumGridState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                            info.key in albumKeys &&
+                                                pos.x >= info.offset.x && pos.x <= info.offset.x + info.size.width &&
+                                                y >= info.offset.y && y <= info.offset.y + info.size.height
+                                        }
                                     }
                                     fun finish() {
                                         val key = draggedKey ?: return

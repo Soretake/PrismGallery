@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -691,7 +693,10 @@ private fun SheetFrame(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding(),
+                .statusBarsPadding()
+                // A sheet with a text field: the room above the keyboard is what it may fill. Without this the
+                // window was shifted up as a whole and the sheet's title slid under the status bar.
+                .imePadding(),
             contentAlignment = Alignment.BottomCenter
         ) {
             val floating = language == DesignLanguage.IOS_LIQUID_GLASS
@@ -887,6 +892,11 @@ private fun PopupMenuFrame(
     val language = theme.language
 
     BackHandler(enabled = transition.targetState) { onDismissRequest() }
+    // The menu stays between the status bar and the navigation bar. A long menu (an album's, opened low on the
+    // screen) used to be pushed up to the very top, where its first entries sat under the status bar.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val topInset = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
+    val bottomInset = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density)
 
     val progress by transition.animateFloat(
         transitionSpec = {
@@ -983,8 +993,10 @@ private fun PopupMenuFrame(
         ) { measurables, constraints ->
             val margin = 12.dp.roundToPx()
             val gap = 6.dp.roundToPx()
+            val top = topInset + margin
+            val bottom = constraints.maxHeight - bottomInset - margin
             val placeable = measurables.first().measure(
-                constraints.copy(minWidth = 0, minHeight = 0, maxHeight = (constraints.maxHeight - 2 * margin).coerceAtLeast(0))
+                constraints.copy(minWidth = 0, minHeight = 0, maxHeight = (bottom - top).coerceAtLeast(0))
             )
             val anchor = anchorBounds ?: Rect(
                 constraints.maxWidth.toFloat() - margin, 0f, constraints.maxWidth.toFloat() - margin, 0f
@@ -992,11 +1004,11 @@ private fun PopupMenuFrame(
             val x = (anchor.right.roundToInt() - placeable.width)
                 .coerceIn(margin, (constraints.maxWidth - placeable.width - margin).coerceAtLeast(margin))
             var y = anchor.bottom.roundToInt() + gap
-            if (y + placeable.height > constraints.maxHeight - margin) {
-                y = (anchor.top.roundToInt() - placeable.height - gap).coerceAtLeast(margin)
+            if (y + placeable.height > bottom) {
+                y = (anchor.top.roundToInt() - placeable.height - gap).coerceAtLeast(top)
             }
             // Fits neither below nor above the anchor: as much of the screen as needed.
-            y = y.coerceAtMost((constraints.maxHeight - placeable.height - margin).coerceAtLeast(margin))
+            y = y.coerceAtMost((bottom - placeable.height).coerceAtLeast(top))
             layout(constraints.maxWidth, constraints.maxHeight) {
                 placeable.place(x, y)
             }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -114,17 +115,28 @@ fun MotionPlayerOverlay(item: MediaItem, file: File, onClose: () -> Unit) {
     OverlayWindow { _ ->
         BackHandler(onBack = onClose)
         var controls by remember { mutableStateOf(true) }
+        val controller = remember { com.example.amoledgallery.ui.components.VideoController() }
+        val motionItem = remember(item, file) { item.copy(uri = Uri.fromFile(file), isVideo = true, mimeType = "video/mp4", durationMs = 0L) }
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             AmoledVideoPlayer(
-                item = item.copy(uri = Uri.fromFile(file), isVideo = true, mimeType = "video/mp4"),
+                item = motionItem,
                 isActivePage = true,
+                controller = controller,
                 controlsVisible = controls,
                 onTap = { controls = !controls },
-                onShowControls = { controls = true },
-                onPlayingChange = {},
-                onScrubbingChange = {},
+                onZoomChange = {},
                 modifier = Modifier.fillMaxSize()
             )
+            if (controls) {
+                com.example.amoledgallery.ui.components.VideoControls(
+                    controller = controller,
+                    item = motionItem,
+                    language = com.example.amoledgallery.ui.theme.LocalAppTheme.current.language,
+                    lightChrome = false,
+                    hazeState = null,
+                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp)
+                )
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)

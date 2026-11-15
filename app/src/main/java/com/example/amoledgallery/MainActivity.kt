@@ -452,6 +452,7 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                     }
                                 }
                         ) {
+                            CompositionLocalProvider(com.example.amoledgallery.ui.design.LocalTabVisible provides isActiveTab) {
                             when (tab) {
                                 GalleryTab.BILDER -> {
                                     val isLoading = uiState is GalleryUiState.Loading
@@ -597,6 +598,7 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                         onSettingsPageOpenChanged = { settingsPageOpen = it }
                                     )
                                 }
+                            }
                             }
                         }
                     }

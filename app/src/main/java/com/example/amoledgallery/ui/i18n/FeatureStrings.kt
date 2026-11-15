@@ -10,6 +10,21 @@ object F {
     private fun n(count: Int, oneEn: String, otherEn: String, oneDe: String, otherDe: String) =
         "$count " + if (en) (if (count == 1) oneEn else otherEn) else (if (count == 1) oneDe else otherDe)
 
+    // ---- Filtered counts ----------------------------------------------------------------------------
+    fun imageCount(count: Int) = n(count, "image", "images", "Bild", "Bilder")
+    fun videoCount(count: Int) = n(count, "video", "videos", "Video", "Videos")
+    fun gifCount(count: Int) = n(count, "GIF", "GIFs", "GIF", "GIFs")
+
+    // ---- Albums -------------------------------------------------------------------------------------
+    val invalidFolderName get() = t(
+        "A name cannot contain / \\ : * ? \" < > |",
+        "Ein Name darf / \\ : * ? \" < > | nicht enthalten"
+    )
+
+    // ---- Video player -------------------------------------------------------------------------------
+    val loopOn get() = t("Loop: on", "Wiederholen: an")
+    val loopOff get() = t("Loop: off", "Wiederholen: aus")
+
     // ---- Tools hub ----------------------------------------------------------------------------------
     val tools get() = t("Tools", "Werkzeuge")
     val toolsSubtitle get() = t("Search, places, clean-up and more", "Suche, Orte, Aufräumen und mehr")

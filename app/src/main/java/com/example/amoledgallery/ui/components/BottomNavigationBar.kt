@@ -2,7 +2,6 @@ package com.example.amoledgallery.ui.components
 import com.example.amoledgallery.ui.i18n.strings
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -65,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -74,13 +74,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.example.amoledgallery.ui.design.GlassRim
 import com.example.amoledgallery.ui.design.glass
 import com.example.amoledgallery.ui.design.geminiGlass
@@ -100,6 +103,7 @@ import com.example.amoledgallery.ui.theme.isLight
 import com.example.amoledgallery.ui.theme.onAccent
 import com.example.amoledgallery.ui.viewmodel.GalleryTab
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private const val HOLD_TO_SLIDE_TIMEOUT_MS = 250L
 
@@ -155,8 +159,6 @@ fun BottomNavigationBar(
     var gestureRootX by remember { mutableFloatStateOf(0f) }
     var slideRootX by remember { mutableStateOf<Float?>(null) }
     var pressed by remember { mutableStateOf(false) }
-    // Where the finger touches the bar (local to the bar), for the iOS glass glint.
-    var touchPoint by remember { mutableStateOf(Offset.Unspecified) }
     val latestTab by rememberUpdatedState(currentTab)
     val latestOnTabSelected by rememberUpdatedState(onTabSelected)
 
@@ -173,7 +175,6 @@ fun BottomNavigationBar(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 pressed = true
-                touchPoint = down.position
                 val downTime = System.currentTimeMillis()
                 var slideActive = false
                 var hoveredIndex = -1
@@ -181,11 +182,14 @@ fun BottomNavigationBar(
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull { it.id == down.id }
                     if (change == null || !change.pressed) {
+                        // Let go on the menu: only now does it open.
+                        if (change != null && slideActive && hoveredIndex != -1 && NAV_TABS[hoveredIndex].tab == GalleryTab.MENU) {
+                            latestOnTabSelected(GalleryTab.MENU)
+                        }
                         slideRootX = null
                         pressed = false
                         break
                     }
-                    touchPoint = change.position
                     // Sliding starts after a short hold, or as soon as the finger clearly moves sideways.
                     if (!slideActive && (System.currentTimeMillis() - downTime >= HOLD_TO_SLIDE_TIMEOUT_MS ||
                             abs(change.position.x - down.position.x) > viewConfiguration.touchSlop)
@@ -197,12 +201,15 @@ fun BottomNavigationBar(
                         val rootX = gestureRootX + change.position.x
                         slideRootX = rootX
                         change.consume()
-                        // Live switching: the hovered tab opens immediately, without waiting for release.
+                        // Live switching: a hovered content tab opens immediately, without waiting for release.
+                        // The menu is a page of its own rather than a view of the library, so sliding across it
+                        // only highlights it; see the release above.
                         val index = indexForRootX(rootX)
                         if (index != hoveredIndex) {
                             if (hoveredIndex != -1) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             hoveredIndex = index
-                            if (NAV_TABS[index].tab != latestTab) latestOnTabSelected(NAV_TABS[index].tab)
+                            val hovered = NAV_TABS[index].tab
+                            if (hovered != GalleryTab.MENU && hovered != latestTab) latestOnTabSelected(hovered)
                         }
                     }
                 }
@@ -313,6 +320,19 @@ fun BottomNavigationBar(
             val activeFill = com.example.amoledgallery.ui.design.geminiSelectionFill(palette.isLight)
             val activeEdge = com.example.amoledgallery.ui.design.geminiSelectionEdge(palette.isLight)
             val barScale by animateFloatAsState(if (pressed) 0.98f else 1f, label = "google_bar_press")
+            // How far each tab is open. One spring opens a tab while the other closes, so the bar keeps its width
+            // instead of jumping, and the frames only re-lay and redraw the bar: nothing recomposes. The labels stay
+            // composed, because adding one in the middle of a switch made the width step before the spring started.
+            val contentTabs = 2
+            val tabOpen = remember { List(contentTabs) { Animatable(if (it == highlighted) 1f else 0f) } }
+            LaunchedEffect(highlighted) {
+                tabOpen.forEachIndexed { index, open ->
+                    launch { open.animateTo(if (index == highlighted) 1f else 0f, spring(dampingRatio = 0.86f, stiffness = 380f)) }
+                }
+            }
+            val tabWidths = remember { FloatArray(contentTabs) }
+            val tabGap = 4.dp
+            val barPadding = 9.dp
             Row(
                 modifier = Modifier
                     .height(70.dp)
@@ -322,30 +342,55 @@ fun BottomNavigationBar(
                     }
                     .geminiGlass(pill, tintAlpha = com.example.amoledgallery.ui.design.GEMINI_PILL_TINT, blur = com.example.amoledgallery.ui.design.GeminiPillBlur, vivid = true)
                     .then(holdSlideModifier)
-                    .padding(horizontal = 9.dp),
+                    // One capsule glides from tab to tab, where two used to fade in and out on their own.
+                    .drawBehind {
+                        val open0 = tabOpen[0].value.coerceAtLeast(0f)
+                        val open1 = tabOpen[1].value.coerceAtLeast(0f)
+                        val visible = maxOf(open0, open1).coerceAtMost(1f)
+                        if (visible <= 0.001f) return@drawBehind
+                        val toSecond = open1 / (open0 + open1)
+                        val first = barPadding.toPx()
+                        val second = first + tabWidths[0] + tabGap.toPx()
+                        val left = first + (second - first) * toSecond
+                        val width = tabWidths[0] + (tabWidths[1] - tabWidths[0]) * toSecond
+                        val height = 52.dp.toPx()
+                        val top = (size.height - height) / 2f
+                        val radius = androidx.compose.ui.geometry.CornerRadius(height / 2f)
+                        drawRoundRect(activeFill, Offset(left, top), androidx.compose.ui.geometry.Size(width, height), radius, alpha = visible)
+                        drawRoundRect(
+                            activeEdge,
+                            Offset(left, top),
+                            androidx.compose.ui.geometry.Size(width, height),
+                            radius,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(0.8.dp.toPx()),
+                            alpha = visible
+                        )
+                    }
+                    .padding(horizontal = barPadding),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(tabGap)
             ) {
-                NAV_TABS.take(2).forEachIndexed { index, tab ->
+                NAV_TABS.take(contentTabs).forEachIndexed { index, tab ->
                     val selected = index == highlighted
-                    val container by animateColorAsState(
-                        targetValue = if (selected) activeFill else activeFill.copy(alpha = 0f),
-                        animationSpec = spring(stiffness = 700f),
-                        label = "google_tab_container"
-                    )
                     Row(
                         modifier = Modifier
                             .then(reportCenter(index))
                             .height(52.dp)
                             .clip(pill)
-                            .background(container)
-                            .border(0.8.dp, activeEdge.copy(alpha = activeEdge.alpha * (container.alpha / activeFill.alpha.coerceAtLeast(0.01f))), pill)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = ripple(color = palette.onBackground)
                             ) { onTabSelected(tab.tab) }
-                            .animateContentSize(spring(dampingRatio = 0.7f, stiffness = 500f))
-                            .padding(horizontal = if (selected) 22.dp else 18.dp),
+                            // Inside the clip, so a closing tab cuts its label off at its current width.
+                            .layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity))
+                                val closed = (18.dp + 26.dp + 18.dp).roundToPx()
+                                val open = tabOpen[index].value.coerceIn(0f, 1.1f)
+                                val width = (closed + (placeable.width - closed) * open).roundToInt()
+                                tabWidths[index] = width.toFloat()
+                                layout(width, placeable.height) { placeable.placeRelative(0, 0) }
+                            }
+                            .padding(start = 18.dp, end = 22.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -354,26 +399,29 @@ fun BottomNavigationBar(
                             tint = palette.onBackground,
                             modifier = Modifier
                                 .size(26.dp)
-                                .selectionPop(selected, fromScale = 0.7f, dampingRatio = 0.45f, stiffness = 600f)
+                                .selectionPop(selected, fromScale = 0.88f, dampingRatio = 0.8f, stiffness = 420f)
                         )
-                        if (selected) {
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = tab.label,
-                                color = palette.onBackground,
-                                fontSize = 19.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = tab.label,
+                            color = palette.onBackground,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            modifier = Modifier.graphicsLayer {
+                                // Appears once the tab has opened far enough to show it, and leaves first.
+                                alpha = ((tabOpen[index].value - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                            }
+                        )
                     }
                 }
             }
             val menuTab = NAV_TABS[2]
             val menuSelected = highlighted == 2
             val menuInteraction = remember { MutableInteractionSource() }
-            val menuFill by animateColorAsState(
-                targetValue = if (menuSelected) activeFill else activeFill.copy(alpha = 0f),
+            val menuFill by animateFloatAsState(
+                targetValue = if (menuSelected) 1f else 0f,
+                animationSpec = spring(dampingRatio = 1f, stiffness = 380f),
                 label = "google_menu_fill"
             )
             Box(
@@ -390,8 +438,9 @@ fun BottomNavigationBar(
                 Box(
                     modifier = Modifier
                         .size(54.dp)
+                        .graphicsLayer { alpha = menuFill }
                         .clip(CircleShape)
-                        .background(menuFill)
+                        .background(activeFill)
                 )
                 Icon(
                     Icons.Rounded.Settings,
@@ -399,7 +448,7 @@ fun BottomNavigationBar(
                     tint = palette.onBackground,
                     modifier = Modifier
                         .size(26.dp)
-                        .selectionPop(menuSelected, fromScale = 0.7f, dampingRatio = 0.45f, stiffness = 600f)
+                        .selectionPop(menuSelected, fromScale = 0.88f, dampingRatio = 0.8f, stiffness = 420f)
                 )
             }
         }
@@ -411,18 +460,7 @@ fun BottomNavigationBar(
                 .padding(start = 22.dp, end = 22.dp, top = 8.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val swell by animateFloatAsState(
-                targetValue = if (pressed) 1.045f else 1f,
-                animationSpec = spring(dampingRatio = 0.5f, stiffness = 480f),
-                label = "ios_swell"
-            )
             val pill = RoundedCornerShape(percent = 50)
-            // Specular glint: a soft light spot under the finger while the glass is touched.
-            val glint by animateFloatAsState(
-                targetValue = if (pressed) 1f else 0f,
-                animationSpec = tween(if (pressed) 90 else 420),
-                label = "ios_glint"
-            )
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)

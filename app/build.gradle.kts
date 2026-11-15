@@ -28,6 +28,8 @@ android {
         // True while this version is still in testing; set to false for the published release. The
         // About page shows it (and whether this is a debug build) next to the version.
         buildConfigField("boolean", "PRERELEASE", "true")
+        // When set, the app only sees media under this relative path (see the profile build type).
+        buildConfigField("String", "TEST_MEDIA_PATH", "\"\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -47,6 +49,11 @@ android {
     }
 
     buildTypes {
+        // Debug builds install next to the release app instead of replacing it (they are signed with a
+        // different key, so replacing would mean uninstalling the release app and losing its data).
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
@@ -55,6 +62,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        // The release build (R8, baseline profile, not debuggable) signed with the debug key, for measuring
+        // performance on a device. Installs next to the release app like the debug build.
+        create("profile") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".profile"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            // Test phones hold private photos: this build sees only the generated test media in this folder.
+            buildConfigField("String", "TEST_MEDIA_PATH", "\"Pictures/PrismPerfTest/\"")
         }
     }
 

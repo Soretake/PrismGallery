@@ -1135,12 +1135,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 loadTrash()
             } else if (albumRename != null) {
                 pendingAlbumRename = null
-                val stillDenied = repository.moveToRelativePath(albumRename.deniedItems, albumRename.relativePath)
+                val stillDenied = repository.finishAlbumRename(albumRename)
                 if (stillDenied.isNotEmpty()) {
                     _userMessage.emit(strings.error(strings.permissionDenied))
                 } else {
-                    withContext(Dispatchers.IO) { repository.removeDirectoryIfEmpty(albumRename.oldDirectoryPath) }
+                    _userMessage.emit(strings.albumRenamed(albumRename.relativePath.trim('/').substringAfterLast('/')))
                 }
+                clearSelection()
+                loadMedia()
+                followRenamedAlbum(albumRename)
+                return@launch
             } else if (rename != null) {
                 pendingRename = null
                 when (val result = withContext(Dispatchers.IO) { repository.renameMedia(rename.uri, rename.oldName, rename.targetName) }) {
@@ -1248,14 +1252,34 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
                 _userMessage.emit(strings.albumRenamed(newName))
                 loadMedia()
-                if (_selectedAlbum.value?.bucketId == album.bucketId) {
-                    val updated = _albumsState.value.firstOrNull { it.name == newName } ?: album.copy(name = newName)
-                    _selectedAlbum.value = updated
-                    loadAlbumContents(updated)
-                }
+                followRenamedAlbum(outcome)
             }.onFailure { err ->
                 _userMessage.emit(strings.renameError(err.localizedMessage))
             }
+        }
+    }
+
+    /**
+     * A renamed album has a new folder and with it a new id. Where it is open - or one of its sub-albums is - the
+     * trail is rebuilt from the reloaded albums; it used to keep the old id, which showed an empty album.
+     */
+    private suspend fun followRenamedAlbum(outcome: AlbumRenameOutcome) {
+        val open = _selectedAlbum.value ?: return
+        val old = outcome.oldDirectoryPath.trimEnd('/')
+        val openDir = open.directoryPath.trimEnd('/')
+        if (old.isBlank() || !(openDir.equals(old, ignoreCase = true) || openDir.startsWith("$old/", ignoreCase = true))) {
+            loadAlbumContents(open)
+            return
+        }
+        loadJob?.join()
+        val newRel = outcome.relativePath.trim('/') + openDir.substring(old.length)
+        val updated = _albumsState.value.firstOrNull { it.relativePath.trim('/').equals(newRel, ignoreCase = true) }
+        if (updated == null) {
+            closeAlbum()
+        } else {
+            _breadcrumbStack.value = repository.ancestorsOf(updated, _albumsState.value) + updated
+            _selectedAlbum.value = updated
+            loadAlbumContents(updated)
         }
     }
 
@@ -1318,7 +1342,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             var done = 0
             var moved = 0
             var failed = 0
-            val deleteRequests = ArrayList<android.app.PendingIntent>()
+            val pendingDeletes = ArrayList<Uri>()
 
             // NonCancellable for the same reason one album is: stopping halfway would leave an album
             // with part of itself on each storage.
@@ -1332,7 +1356,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     result.onSuccess { outcome ->
                         moved += outcome.moved
                         failed += outcome.failed
-                        outcome.deleteRequest?.let { deleteRequests.add(it) }
+                        pendingDeletes.addAll(outcome.pendingDeleteUris)
                     }.onFailure { failed += album.count }
                 }
             }
@@ -1341,8 +1365,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             _userMessage.emit(
                 if (failed > 0) strings.migratedAlbumsPartly(moved, failed) else strings.migratedAlbums(todo.size, toSdCard)
             )
-            // Originals owned by other apps still need the user's go-ahead; they come one after another.
-            deleteRequests.firstOrNull()?.let { _pendingIntentSender.emit(it) }
+            // Originals owned by other apps still need the user's go-ahead: one request for all albums. Only the
+            // first album's used to be asked for, which left the others' originals behind as doubles.
+            if (pendingDeletes.isNotEmpty()) {
+                withContext(Dispatchers.IO) { repository.createDeleteRequest(pendingDeletes) }?.let { _pendingIntentSender.emit(it) }
+            }
             loadAlbums()
             loadMedia()
             if (todo.any { it.bucketId == _selectedAlbum.value?.bucketId }) closeAlbum()

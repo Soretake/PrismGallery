@@ -38,7 +38,9 @@ data class AlbumRenameOutcome(
     val deniedItems: List<MediaItem>,
     val relativePath: String,
     /** The album's folder before the rename, removed once it has been emptied. */
-    val oldDirectoryPath: String = ""
+    val oldDirectoryPath: String = "",
+    /** Where each of [deniedItems] belongs, by media id: photos of sub-albums keep their folder below the album. */
+    val deniedTargets: Map<Long, String> = emptyMap()
 )
 
 sealed interface MoveResult {
@@ -89,6 +91,26 @@ class MediaRepository(private val context: Context) {
     private fun isOnMissingVolume(path: String?, mountedRoots: List<String>?): Boolean =
         mountedRoots != null && path != null && path.startsWith("/storage/") &&
             mountedRoots.none { path.startsWith("$it/", ignoreCase = true) }
+
+    /**
+     * Joins [selection] with the test build's folder restriction ([com.example.amoledgallery.BuildConfig.TEST_MEDIA_PATH]):
+     * the performance build runs on test phones whose own photos it must never show. Empty in real builds.
+     */
+    private fun restrictToTestMedia(selection: String?, args: Array<String>?): Pair<String?, Array<String>?> {
+        val path = com.example.amoledgallery.BuildConfig.TEST_MEDIA_PATH
+        if (path.isEmpty()) return selection to args
+        val clause = "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
+        return (if (selection == null) clause else "($selection) AND $clause") to ((args ?: emptyArray()) + "$path%")
+    }
+
+    /** [restrictToTestMedia] for queries that take their arguments in a Bundle. */
+    private fun Bundle.restrictToTestMedia(): Bundle = apply {
+        val (selection, args) = restrictToTestMedia(null, null)
+        if (selection != null) {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args)
+        }
+    }
 
     private val hiddenPrefs = context.getSharedPreferences("amoled_gallery_hidden_prefs", Context.MODE_PRIVATE)
     private val KEY_HIDDEN_BUCKETS = "hidden_bucket_ids"
@@ -178,8 +200,10 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.SIZE
         )
 
-        val selection = if (bucketId != null) "${MediaStore.Images.Media.BUCKET_ID} = ?" else null
-        val selectionArgs = if (bucketId != null) arrayOf(bucketId) else null
+        val (selection, selectionArgs) = restrictToTestMedia(
+            if (bucketId != null) "${MediaStore.Images.Media.BUCKET_ID} = ?" else null,
+            if (bucketId != null) arrayOf(bucketId) else null
+        )
         val sortOrder = "${MediaStore.MediaColumns.DATE_ADDED} DESC"
 
         try {
@@ -215,8 +239,10 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.SIZE
         )
 
-        val videoSelection = if (bucketId != null) "${MediaStore.Video.Media.BUCKET_ID} = ?" else null
-        val videoSelectionArgs = if (bucketId != null) arrayOf(bucketId) else null
+        val (videoSelection, videoSelectionArgs) = restrictToTestMedia(
+            if (bucketId != null) "${MediaStore.Video.Media.BUCKET_ID} = ?" else null,
+            if (bucketId != null) arrayOf(bucketId) else null
+        )
 
         try {
             contentResolver.query(
@@ -549,6 +575,13 @@ class MediaRepository(private val context: Context) {
         removeDirectoryIfEmpty(album.directoryPath)
     }
 
+    /**
+     * Whether [name] can be a folder's name. A slash made "a/b" two nested folders while the album was looked for
+     * as "b"; the other characters are refused by SD cards (FAT, exFAT).
+     */
+    private fun isValidFolderName(name: String): Boolean =
+        name != "." && name != ".." && name.none { it in "/\\:*?\"<>|" || it.code < 32 }
+
     private fun normalizeDirPath(path: String): String {
 
         return path.trimEnd('/', '\\').lowercase()
@@ -669,9 +702,15 @@ class MediaRepository(private val context: Context) {
                                 }
                             }
                         } finally {
-                            values.clear()
-                            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                            contentResolver.update(destUri, values, null, null)
+                            if (copied) {
+                                values.clear()
+                                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                contentResolver.update(destUri, values, null, null)
+                            } else {
+                                // Unreadable original, or the target ran full: publishing the half-written copy
+                                // left an empty or cut-off file in the album.
+                                runCatching { contentResolver.delete(destUri, null, null) }
+                            }
                         }
                         if (copied) preserveModifiedTime(destUri, item)
                     }
@@ -825,7 +864,16 @@ class MediaRepository(private val context: Context) {
             MediaStore.MediaColumns.BUCKET_ID,
             MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
             MediaStore.MediaColumns.RELATIVE_PATH,
-            MediaStore.MediaColumns.DATE_MODIFIED
+            MediaStore.MediaColumns.DATE_MODIFIED,
+            // Without these a photo in the trash showed the day it was last changed as its date, and its
+            // details had no type or size.
+            MediaStore.MediaColumns.MIME_TYPE,
+            MediaStore.MediaColumns.DATA,
+            MediaStore.MediaColumns.DATE_TAKEN,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            MediaStore.MediaColumns.ORIENTATION,
+            MediaStore.MediaColumns.SIZE
         )
 
         val bundle = Bundle().apply {
@@ -834,7 +882,7 @@ class MediaRepository(private val context: Context) {
                 ContentResolver.QUERY_ARG_SQL_SORT_ORDER,
                 "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
             )
-        }
+        }.restrictToTestMedia()
 
         try {
             contentResolver.query(imagesUri, projection, bundle, null)?.use { cursor ->
@@ -852,7 +900,14 @@ class MediaRepository(private val context: Context) {
             MediaStore.Video.Media.BUCKET_ID,
             MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
             MediaStore.Video.Media.RELATIVE_PATH,
-            MediaStore.Video.Media.DATE_MODIFIED
+            MediaStore.Video.Media.DATE_MODIFIED,
+            MediaStore.MediaColumns.MIME_TYPE,
+            MediaStore.MediaColumns.DATA,
+            MediaStore.MediaColumns.DATE_TAKEN,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            MediaStore.MediaColumns.ORIENTATION,
+            MediaStore.MediaColumns.SIZE
         )
 
         try {
@@ -946,6 +1001,9 @@ class MediaRepository(private val context: Context) {
             val cleanName = albumName.trim()
             if (cleanName.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException(strings.nameEmpty))
+            }
+            if (!isValidFolderName(cleanName)) {
+                return@withContext Result.failure(IllegalArgumentException(com.example.amoledgallery.ui.i18n.F.invalidFolderName))
             }
 
             val targetDir: File = if (onSdCard) {
@@ -1073,6 +1131,9 @@ class MediaRepository(private val context: Context) {
             if (cleanName.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException(strings.nameEmpty))
             }
+            if (!isValidFolderName(cleanName)) {
+                return@withContext Result.failure(IllegalArgumentException(com.example.amoledgallery.ui.i18n.F.invalidFolderName))
+            }
 
             val parentDir: File = if (parentAlbum.directoryPath.isNotBlank()) {
                 File(parentAlbum.directoryPath)
@@ -1196,7 +1257,8 @@ class MediaRepository(private val context: Context) {
         fun sumOf(uri: Uri): Map<String?, Long> {
             val sums = HashMap<String?, Long>()
             try {
-                contentResolver.query(uri, projection, null, null, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { cursor ->
+                val (selection, args) = restrictToTestMedia(null, null)
+                contentResolver.query(uri, projection, selection, args, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { cursor ->
                     val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
                     val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
                     val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
@@ -1228,7 +1290,7 @@ class MediaRepository(private val context: Context) {
         val videoSums = sumOf(videosUri)
         val trashSums = HashMap<String?, Long>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bundle = Bundle().apply { putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY) }
+            val bundle = Bundle().apply { putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY) }.restrictToTestMedia()
             listOf(imagesUri, videosUri).forEach { uri ->
                 try {
                     contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.VOLUME_NAME, MediaStore.MediaColumns.DATA), bundle, null)?.use { cursor ->
@@ -1305,6 +1367,9 @@ class MediaRepository(private val context: Context) {
             if (cleanName.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException(strings.nameEmpty))
             }
+            if (!isValidFolderName(cleanName)) {
+                return@withContext Result.failure(IllegalArgumentException(com.example.amoledgallery.ui.i18n.F.invalidFolderName))
+            }
 
             var targetDir: File? = null
             if (album.directoryPath.isNotBlank()) {
@@ -1330,7 +1395,29 @@ class MediaRepository(private val context: Context) {
             // Update all media items belonging to this album in MediaStore. Items of other apps (camera
             // photos) refuse the update; they are handed back so the user can grant write access.
             val items = getAllMedia(album.bucketId, includeHidden = true)
-            val denied = moveToRelativePath(items, newRelPath)
+            val denied = moveToRelativePath(items, newRelPath).toMutableList()
+            val deniedTargets = HashMap<Long, String>()
+            denied.forEach { deniedTargets[it.id] = newRelPath }
+
+            // The folder could not be renamed as a whole (it holds files of other apps, which is the usual case):
+            // its sub-albums have to follow one by one. They used to stay in the old folder, which then no longer
+            // was an album - so they turned up in the main album list. A media container (DCIM, Pictures) is no
+            // album folder; what lies in it is never moved along.
+            if (targetDir == null && oldRel.contains('/') && normalizeDirPath(album.directoryPath) !in mediaContainerDirs()) {
+                val oldPrefix = "$oldRel/"
+                getAllMedia(includeHidden = true)
+                    .filter { it.relativePath.length > oldPrefix.length && it.relativePath.startsWith(oldPrefix, ignoreCase = true) }
+                    .groupBy { it.relativePath }
+                    .forEach { (path, group) ->
+                        val target = newRelPath + path.substring(oldPrefix.length)
+                        moveToRelativePath(group, target).forEach {
+                            denied.add(it)
+                            deniedTargets[it.id] = target
+                        }
+                    }
+            }
+            // Renamed as a whole: the folders remembered as created here (shown while empty) moved with it.
+            targetDir?.let { renameRememberedDirs(album.directoryPath, it.absolutePath) }
 
             // Trigger rescan of the renamed folder
             targetDir?.let { dir ->
@@ -1342,13 +1429,54 @@ class MediaRepository(private val context: Context) {
 
             if (denied.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val pendingIntent = MediaStore.createWriteRequest(contentResolver, denied.map { it.uri })
-                return@withContext Result.success(AlbumRenameOutcome(pendingIntent, denied, newRelPath, album.directoryPath))
+                return@withContext Result.success(AlbumRenameOutcome(pendingIntent, denied, newRelPath, album.directoryPath, deniedTargets))
             }
             removeDirectoryIfEmpty(album.directoryPath)
             Result.success(AlbumRenameOutcome(null, emptyList(), newRelPath, album.directoryPath))
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Moves the items a rename had to leave behind, now that the user has allowed it, each to its own folder.
+     * Returns those that still could not be moved.
+     */
+    suspend fun finishAlbumRename(outcome: AlbumRenameOutcome): List<MediaItem> = withContext(Dispatchers.IO) {
+        val stillDenied = ArrayList<MediaItem>()
+        outcome.deniedItems
+            .groupBy { outcome.deniedTargets[it.id] ?: outcome.relativePath }
+            .forEach { (target, group) -> stillDenied += moveToRelativePath(group, target) }
+        if (stillDenied.isEmpty()) removeDirectoryIfEmpty(outcome.oldDirectoryPath)
+        stillDenied
+    }
+
+    /** Folders remembered as created in this app follow their album when its folder is renamed. */
+    private fun renameRememberedDirs(oldPath: String, newPath: String) {
+        if (oldPath.isBlank() || newPath.isBlank()) return
+        val old = normalizeDirPath(oldPath)
+        fun moved(saved: Set<String>): Set<String>? {
+            var changed = false
+            val result = saved.mapTo(HashSet()) { entry ->
+                val normalized = normalizeDirPath(entry)
+                when {
+                    normalized == old -> {
+                        changed = true
+                        newPath
+                    }
+                    normalized.startsWith("$old/") -> {
+                        changed = true
+                        newPath.trimEnd('/') + entry.trimEnd('/').substring(old.length)
+                    }
+                    else -> entry
+                }
+            }
+            return if (changed) result else null
+        }
+        val editor = hiddenPrefs.edit()
+        moved(hiddenPrefs.getStringSet(KEY_CREATED_ALBUM_DIRS, emptySet()) ?: emptySet())?.let { editor.putStringSet(KEY_CREATED_ALBUM_DIRS, it) }
+        moved(getCreatedSubAlbumDirs())?.let { editor.putStringSet(KEY_CREATED_SUB_ALBUM_DIRS, it) }
+        editor.apply()
     }
 
     /**
@@ -1386,7 +1514,9 @@ class MediaRepository(private val context: Context) {
         /** The user has to confirm deleting originals owned by other apps; null when nothing is left. */
         val deleteRequest: PendingIntent?,
         val moved: Int,
-        val failed: Int
+        val failed: Int,
+        /** The originals [deleteRequest] asks about, so several albums can be asked for in one go. */
+        val pendingDeleteUris: List<Uri> = emptyList()
     )
 
     /**
@@ -1455,7 +1585,7 @@ class MediaRepository(private val context: Context) {
             } else {
                 null
             }
-            Result.success(MigrationResult(deleteRequest, moved, failed))
+            Result.success(MigrationResult(deleteRequest, moved, failed, securityExceptionUris))
         } catch (e: Exception) {
             Result.failure(e)
         }

@@ -1,5 +1,8 @@
 package com.example.amoledgallery.ui.design
 
+import android.graphics.RuntimeShader
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -23,14 +26,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
@@ -38,7 +40,6 @@ import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -53,6 +54,7 @@ import com.example.amoledgallery.ui.theme.LocalAppTheme
 import com.example.amoledgallery.ui.theme.isLight
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -238,7 +240,6 @@ fun Modifier.geminiGlow(
 ): Modifier = drawWithCache {
     val outline = shape.createOutline(size, layoutDirection, this)
     val clip = Path().apply { addOutline(outline) }
-    val bounds = Rect(Offset.Zero, size)
     val w = size.width
     val hgt = size.height
     // Low on small bars, a little higher on large cards; the edges always rise clearly above the middle.
@@ -251,7 +252,10 @@ fun Modifier.geminiGlow(
     // The tall vivid glow needs finer steps, or its layered edge shows as bands.
     val layers = if (vivid) 28 else 14
     val rim = Stroke(width = 1.dp.toPx() * 2f)
-    val fade = Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Transparent, 1f to Color.Black)
+    // The rim fades out towards the top. Multiplied into its colours in the shader itself: fading it with a
+    // DstIn rectangle needed an offscreen layer per surface on every frame.
+    val fade = (Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Transparent, 1f to Color.Black) as ShaderBrush)
+        .createShader(size)
     val band = Path()
     val heights = FloatArray(samples + 1)
     onDrawWithContent {
@@ -269,30 +273,79 @@ fun Modifier.geminiGlow(
             start = Offset(start, 0f),
             end = Offset(start + tile, 0f),
             tileMode = TileMode.Repeated
-        )
+        ) as ShaderBrush
         for (i in 0..samples) heights[i] = glowHeight(i / samples.toFloat(), points, pulse, midPx, edgePx)
         val lift = strength * (0.9f + 0.35f * e)
+        val layerOpacity = (layerAlpha * lift).coerceIn(0f, 1f)
         clipPath(clip) {
             if (vivid) drawRect(shade)
-            // Stacked, shrinking copies of the band: strongest at the bottom, fading softly towards its top edge.
-            for (layer in 1..layers) {
-                val s = layer / layers.toFloat()
-                band.reset()
-                band.moveTo(0f, hgt)
-                for (i in 0..samples) band.lineTo(w * i / samples, hgt - heights[i] * s)
-                band.lineTo(w, hgt)
-                band.close()
-                drawPath(band, gradient, alpha = (layerAlpha * lift).coerceIn(0f, 1f))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                drawRect(GeminiGlowShader.brush(gradient.createShader(size), size, heights, layers, layerOpacity))
+            } else {
+                // Stacked, shrinking copies of the band: strongest at the bottom, fading softly towards its top edge.
+                for (layer in 1..layers) {
+                    val s = layer / layers.toFloat()
+                    band.reset()
+                    band.moveTo(0f, hgt)
+                    for (i in 0..samples) band.lineTo(w * i / samples, hgt - heights[i] * s)
+                    band.lineTo(w, hgt)
+                    band.close()
+                    drawPath(band, gradient, alpha = layerOpacity)
+                }
             }
         }
-        drawIntoCanvas { it.saveLayer(bounds, Paint()) }
-        drawOutline(outline, gradient, alpha = (0.4f * lift).coerceIn(0f, 1f), style = rim)
-        drawRect(fade, blendMode = BlendMode.DstIn)
-        drawIntoCanvas { it.restore() }
+        val fadedGradient = android.graphics.ComposeShader(fade, gradient.createShader(size), android.graphics.BlendMode.SRC_IN)
+        drawOutline(outline, ShaderBrush(fadedGradient), alpha = (0.4f * lift).coerceIn(0f, 1f), style = rim)
         if (vivid) drawOutline(outline, sheen, style = Stroke(width = 1.dp.toPx()))
         drawContent()
     }
 }
+
+/**
+ * The glow band in a single pass (Android 13+). It used to be drawn as up to 28 stacked, shrinking copies of the
+ * band at low opacity, which filled each glow pixel up to 28 times on every frame of the animation - the main
+ * reason Gemini dropped frames on budget GPUs. The shader works out per pixel how many of those copies cover it
+ * and blends that many, so the colour comes out the same. Shared, so it is compiled once; every draw sets its own
+ * uniforms right before, and the drawing keeps a copy of them. Main thread only, like all drawing.
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private object GeminiGlowShader {
+    private val shader by lazy(LazyThreadSafetyMode.NONE) { RuntimeShader(GLOW_SHADER) }
+
+    fun brush(gradient: android.graphics.Shader, size: Size, heights: FloatArray, layers: Int, layerAlpha: Float): ShaderBrush {
+        shader.setInputShader("gradient", gradient)
+        shader.setFloatUniform("size", size.width, size.height)
+        shader.setFloatUniform("heights", heights)
+        shader.setFloatUniform("layers", layers.toFloat())
+        shader.setFloatUniform("layerAlpha", layerAlpha)
+        return ShaderBrush(shader)
+    }
+}
+
+// heights: the band's height at 33 points across the width (the outline the stacked copies were drawn from).
+// A copy at scale k / layers covers a pixel when that pixel lies below its top edge; the last copy's edge is
+// anti-aliased like a path's.
+private const val GLOW_SHADER = """
+uniform shader gradient;
+uniform float2 size;
+uniform float heights[33];
+uniform float layers;
+uniform float layerAlpha;
+
+half4 main(float2 p) {
+    float u = clamp(p.x / size.x, 0.0, 1.0) * 32.0;
+    float h = heights[0];
+    for (int k = 0; k < 32; k++) {
+        if (u >= float(k)) {
+            h = mix(heights[k], heights[k + 1], clamp(u - float(k), 0.0, 1.0));
+        }
+    }
+    float d = size.y - p.y;
+    float covered = clamp(layers * (1.0 - d / max(h, 0.001)), 0.0, layers - 1.0) + clamp(h - d + 0.5, 0.0, 1.0);
+    float a = 1.0 - pow(1.0 - layerAlpha, covered);
+    return gradient.eval(p) * half(a);
+}
+"""
 
 /**
  * Gemini's translucent box: frosted glass over the content behind it with the living gradient glow. The glow
@@ -317,7 +370,9 @@ fun Modifier.geminiGlass(
     val points = remember { Random(seed).let { r -> FloatArray(7) { r.nextFloat() } } }
     LaunchedEffect(pulse) { pulse.run() }
     val visit = GeminiVisits.tick.intValue
-    LaunchedEffect(visit) { pulse.poke() }
+    // Surfaces on the hidden tabs stay composed; waking them too animated every one of them for seconds unseen.
+    val visible = LocalTabVisible.current
+    LaunchedEffect(visit) { if (visible) pulse.poke() }
     return this
         .then(
             if (light) {
@@ -337,6 +392,10 @@ fun Modifier.geminiGlass(
             state
         )
         .then(if (light) Modifier.border(1.dp, Color.Black.copy(alpha = 0.06f), shape) else Modifier)
+        // The glow and the surface's content go into a cached layer, so the renderer redraws them only when they
+        // change - not on every frame something else on screen moves, like the grid scrolling behind the tab bar.
+        // The glass is clipped to the shape already, so nothing is lost.
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
         .pointerInput(pulse) {
             awaitPointerEventScope {
                 while (true) {
@@ -468,8 +527,13 @@ fun GeminiStorageRing(
     val cycle = listOf(glow[0], glow[3], glow[2], glow[1])
     val grow = remember { Animatable(0f) }
     val carousel = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        grow.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
+    LaunchedEffect(Unit) { grow.animateTo(1f, tween(1100, easing = FastOutSlowInEasing)) }
+    // The menu tab stays composed behind the others, and this loop asks for a frame on every vsync: left
+    // running it redrew the whole window nonstop, even while scrolling the grid or viewing a photo.
+    val visible = LocalTabVisible.current
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { grow.value >= 1f }.first { it }
         var last = withFrameNanos { it }
         while (true) {
             withFrameNanos { now ->

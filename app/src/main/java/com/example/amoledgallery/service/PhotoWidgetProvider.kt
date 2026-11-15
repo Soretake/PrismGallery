@@ -26,7 +26,8 @@ class PhotoWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                ids.forEach { id -> update(context, manager, id) }
+                // Never lets a failed lookup take the app's process down: the widget then just keeps its photo.
+                ids.forEach { id -> runCatching { update(context, manager, id) } }
             } finally {
                 pending.finish()
             }
@@ -56,20 +57,25 @@ class PhotoWidgetProvider : AppWidgetProvider() {
         val favorites = context.getSharedPreferences("amoled_gallery_fav_prefs", Context.MODE_PRIVATE)
             .getStringSet("favorite_media_ids", emptySet()).orEmpty().mapNotNull { it.toLongOrNull() }
         val imagesUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        // Albums hidden in the gallery stay off the home screen too: the widget used to pick from every
+        // photo on the phone, hidden albums included.
+        val hidden = context.getSharedPreferences("amoled_gallery_hidden_prefs", Context.MODE_PRIVATE)
+            .getStringSet("hidden_bucket_ids", emptySet()).orEmpty()
+        val columns = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.BUCKET_ID)
         val existingFavorites = if (favorites.isEmpty()) emptyList() else {
             val found = ArrayList<Long>()
             context.contentResolver.query(
-                imagesUri, arrayOf(MediaStore.Images.Media._ID),
+                imagesUri, columns,
                 "${MediaStore.Images.Media._ID} IN (${favorites.joinToString(",")})", null, null
-            )?.use { c -> while (c.moveToNext()) found += c.getLong(0) }
+            )?.use { c -> while (c.moveToNext()) if (c.getString(1) !in hidden) found += c.getLong(0) }
             found
         }
         val pool = existingFavorites.ifEmpty {
             val recent = ArrayList<Long>()
             context.contentResolver.query(
-                imagesUri, arrayOf(MediaStore.Images.Media._ID), null, null,
+                imagesUri, columns, null, null,
                 "${MediaStore.Images.Media.DATE_ADDED} DESC"
-            )?.use { c -> while (c.moveToNext() && recent.size < 60) recent += c.getLong(0) }
+            )?.use { c -> while (c.moveToNext() && recent.size < 60) if (c.getString(1) !in hidden) recent += c.getLong(0) }
             recent
         }
         return pool.randomOrNull()?.let { ContentUris.withAppendedId(imagesUri, it) }

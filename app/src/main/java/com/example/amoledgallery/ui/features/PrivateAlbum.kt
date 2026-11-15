@@ -127,22 +127,36 @@ object PrivateVault {
         android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
             ?: "application/octet-stream"
 
-    /** Copies [items] in (keeping their location data and date); returns the ones that were copied. */
-    fun importAll(context: Context, items: List<MediaItem>): List<MediaItem> {
+    /**
+     * Copies [items] in (keeping their location data and date). Returns the ones that were copied, each with the
+     * file it became - a name that was taken already gets a number, so the name alone does not say which file
+     * belongs to which photo.
+     */
+    fun importAll(context: Context, items: List<MediaItem>): Map<MediaItem, File> {
         val target = dir(context)
-        return items.filter { item ->
+        val copied = LinkedHashMap<MediaItem, File>()
+        items.forEach { item ->
             runCatching {
-                var file = File(target, item.displayName.ifBlank { "media_${item.id}" })
+                val name = item.displayName.ifBlank { "media_${item.id}" }
+                val extension = name.substringAfterLast('.', "")
+                var file = File(target, name)
                 var n = 1
                 while (file.exists()) {
-                    file = File(target, item.displayName.substringBeforeLast('.') + " ($n)." + item.displayName.substringAfterLast('.', "jpg"))
+                    file = File(target, name.substringBeforeLast('.') + " ($n)" + if (extension.isEmpty()) "" else ".$extension")
                     n++
                 }
-                (openWithLocation(context, item.uri) ?: error("no input")).use { input -> file.outputStream().use { input.copyTo(it) } }
+                try {
+                    (openWithLocation(context, item.uri) ?: error("no input")).use { input -> file.outputStream().use { input.copyTo(it) } }
+                } catch (e: Exception) {
+                    // Half a file is no private copy: without this it stayed in the album as a broken tile.
+                    file.delete()
+                    throw e
+                }
                 file.setLastModified(item.date * 1000L)
-                true
-            }.getOrDefault(false)
+                copied[item] = file
+            }
         }
+        return copied
     }
 
     /** Moves [items] back into Pictures/Restored (videos: Movies/Restored) and deletes them here. */
@@ -161,6 +175,25 @@ fun PrivateAlbumScreen() {
     var unlocked by remember { mutableStateOf(false) }
     // Changing the PIN: the old one stays valid until a new one has been entered twice.
     var changingPin by remember { mutableStateOf(false) }
+    // Leaving the app locks the album again: it used to stay open for whoever picked the phone up next.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                unlocked = false
+                changingPin = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // While this page is open the window is marked secure, so the private photos do not appear in the
+    // recent-apps preview (which is taken before the album has locked) or in screen recordings.
+    val window = context.activity()?.window
+    androidx.compose.runtime.DisposableEffect(window) {
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+    }
     if (!unlocked || changingPin) {
         androidx.compose.runtime.key(changingPin) {
             PinGate(newPin = changingPin, onUnlocked = { unlocked = true; changingPin = false })
@@ -384,11 +417,12 @@ private fun PrivateContent(onChangePin: () -> Unit) {
 /** Moves [items] into the private album: copied in first, the originals deleted once Android allows it. */
 fun moveToPrivate(context: Context, env: FeatureEnv, items: List<MediaItem>, scope: kotlinx.coroutines.CoroutineScope) {
     scope.launch {
-        val copied = withContext(Dispatchers.IO) { PrivateVault.importAll(context, items) }
-        if (copied.isEmpty()) {
+        val imported = withContext(Dispatchers.IO) { PrivateVault.importAll(context, items) }
+        if (imported.isEmpty()) {
             env.vm.message(F.failed)
             return@launch
         }
+        val copied = imported.keys.toList()
         env.vm.deleteItemsForGood(
             copied,
             onDone = {
@@ -397,10 +431,9 @@ fun moveToPrivate(context: Context, env: FeatureEnv, items: List<MediaItem>, sco
                 env.vm.message(F.movedToPrivate(copied.size))
             },
             onCancelled = {
-                // The originals stay: the copies would only be doubles, so they go again.
-                copied.forEach { item ->
-                    PrivateVault.dir(context).listFiles()?.firstOrNull { it.name == item.displayName }?.delete()
-                }
+                // The originals stay: the copies would only be doubles, so they go again. Exactly the files made
+                // just now - looking them up by name deleted an older private photo that had the same name.
+                imported.values.forEach { it.delete() }
             }
         )
     }

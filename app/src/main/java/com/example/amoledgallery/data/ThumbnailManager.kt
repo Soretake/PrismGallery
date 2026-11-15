@@ -47,14 +47,23 @@ class ThumbnailManager private constructor(private val context: Context) {
     @Volatile
     var quality: PerformanceProfile = PerformanceProfile.MEDIUM
 
+    /**
+     * Width of a grid tile at the default four columns on this screen. Fixed sizes ignored the screen: on a
+     * 1080p phone LOW's 120px thumbnails were stretched over 2x into ~265px tiles (and at 120px the system may
+     * hand out the camera's tiny embedded EXIF preview), so photos could hardly be told apart.
+     */
+    private val tilePx: Int = context.resources.displayMetrics.let { minOf(it.widthPixels, it.heightPixels) } / 4
+
     val thumbnailPx: Int
         get() = when (quality) {
-            PerformanceProfile.LOW -> 120
-            PerformanceProfile.MEDIUM -> 160
+            // A fraction of the tile on the lower tiers keeps decoding and memory cheap; never below the old
+            // fixed sizes, so small screens keep what they had.
+            PerformanceProfile.LOW -> maxOf(160, tilePx * 6 / 10)
+            PerformanceProfile.MEDIUM -> maxOf(160, tilePx * 3 / 4)
             // HIGH/ULTRA target stronger devices, which can afford visibly sharper grid tiles -
             // especially once pinch-zoom shows fewer, larger columns (bigger tiles = more upscaling).
-            PerformanceProfile.HIGH -> 220
-            PerformanceProfile.ULTRA -> 320
+            PerformanceProfile.HIGH -> maxOf(220, tilePx)
+            PerformanceProfile.ULTRA -> maxOf(320, tilePx * 5 / 4)
         }
 
     private val jpegQuality: Int

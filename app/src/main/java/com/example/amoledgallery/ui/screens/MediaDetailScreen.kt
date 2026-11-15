@@ -74,6 +74,8 @@ import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.boundsInRoot
@@ -221,8 +223,8 @@ fun MediaDetailScreen(
     // both fade away together while it plays and come back together on a tap. They used to keep their
     // own visibility and ended up contradicting each other - bars without a scrubber or the other way
     // round - which showed up most clearly in landscape.
-    var videoPlaying by remember { mutableStateOf(false) }
-    var videoScrubbing by remember { mutableStateOf(false) }
+    val videoController = remember { com.example.amoledgallery.ui.components.VideoController() }
+    var videoSpeedOpen by remember { mutableStateOf(false) }
     // Hiding the controls also hides Android's status and navigation bars (a swipe from the edge shows them briefly).
     val hostView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.LaunchedEffect(showControls) {
@@ -244,11 +246,15 @@ fun MediaDetailScreen(
             }
         }
     }
-    androidx.compose.runtime.LaunchedEffect(showControls, videoPlaying, videoScrubbing) {
-        if (showControls && videoPlaying && !videoScrubbing) {
+    androidx.compose.runtime.LaunchedEffect(showControls, videoController.isPlaying, videoController.scrubbing) {
+        if (showControls && videoController.isPlaying && !videoController.scrubbing) {
             kotlinx.coroutines.delay(2500)
             showControls = false
         }
+    }
+    // Pausing, or a video that doesn't loop reaching its end, brings the controls back.
+    androidx.compose.runtime.LaunchedEffect(videoController.pausedByUser, videoController.ended) {
+        if (videoController.pausedByUser || videoController.ended) showControls = true
     }
     var showRenameDialog by remember { mutableStateOf(false) }
     /** The photo whose "set as wallpaper" sheet is open. */
@@ -450,6 +456,7 @@ fun MediaDetailScreen(
         onRestore = { onRestoreItem(currentItem) },
         onDeletePermanently = { onDeletePermanently(currentItem) },
         showRename = !trashMode && !viewOnly && allowRename,
+        showMore = (!trashMode && !viewOnly && allowRename) || currentItem.isVideo,
         onMore = { anchor ->
             moreMenuAnchor = anchor
             showMoreMenu = true
@@ -582,11 +589,14 @@ fun MediaDetailScreen(
                     AmoledVideoPlayer(
                         item = currentMedia,
                         isActivePage = pagerState.currentPage == page,
+                        controller = videoController,
                         controlsVisible = showControls,
                         onTap = onPhotoTap,
-                        onShowControls = { showControls = true },
-                        onPlayingChange = { videoPlaying = it },
-                        onScrubbingChange = { videoScrubbing = it },
+                        onZoomChange = { zoomed ->
+                            if (pagerState.currentPage == page) {
+                                isZoomed = zoomed
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -622,6 +632,18 @@ fun MediaDetailScreen(
                     }
                 }
             }
+        }
+
+        if (currentItem.isVideo) {
+            com.example.amoledgallery.ui.components.VideoCenterPlay(
+                controller = videoController,
+                language = language,
+                visible = showControls,
+                hazeState = detailHaze,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .graphicsLayer { alpha = (1f - (dismissOffset / 220f).coerceIn(0f, 1f)) * (1f - infoProgress * 2f).coerceIn(0f, 1f) }
+            )
         }
 
         AnimatedVisibility(
@@ -670,19 +692,23 @@ fun MediaDetailScreen(
                         alpha = (1f - (dismissOffset / 220f).coerceIn(0f, 1f)) * infoFade
                     }
             ) {
-                if (viewOnly) {
-                    DetailViewOnlyBar(language, lightChrome, detailHaze, actions)
-                } else if (trashMode) {
-                    DetailTrashBar(language, lightChrome, detailHaze, actions)
-                } else if (language == DesignLanguage.SAMSUNG_ONEUI && mediaList.size > 1 && !currentItem.isVideo) {
-                    // One UI: the strip of neighbouring photos above the toolbar (not on videos, where the
-                    // player's seek bar sits in that place).
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        OneUiFilmstrip(mediaList, pagerState)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // iOS keeps its toolbar over the open details, but not the video controls.
+                    if (currentItem.isVideo && !(isIos && infoMostlyOpen)) {
+                        com.example.amoledgallery.ui.components.VideoControls(videoController, currentItem, language, lightChrome, detailHaze)
+                    }
+                    if (viewOnly) {
+                        DetailViewOnlyBar(language, lightChrome, detailHaze, actions)
+                    } else if (trashMode) {
+                        DetailTrashBar(language, lightChrome, detailHaze, actions)
+                    } else {
+                        // One UI: the strip of neighbouring photos above the toolbar (not on videos, where the
+                        // strip of the video's own frames sits in that place).
+                        if (language == DesignLanguage.SAMSUNG_ONEUI && mediaList.size > 1 && !currentItem.isVideo) {
+                            OneUiFilmstrip(mediaList, pagerState)
+                        }
                         DetailBottomBar(language, lightChrome, detailHaze, actions)
                     }
-                } else {
-                    DetailBottomBar(language, lightChrome, detailHaze, actions)
                 }
             }
         }
@@ -758,6 +784,19 @@ fun MediaDetailScreen(
         }
     }
 
+    // Speed and looping, first in every design's "more" menu; the player itself only keeps play, seek and sound.
+    val videoEntries: (Boolean) -> List<com.example.amoledgallery.ui.design.MenuEntry> = { withIcons ->
+        if (!currentItem.isVideo) emptyList() else listOf(
+            com.example.amoledgallery.ui.design.MenuEntry(
+                "${com.example.amoledgallery.ui.i18n.F.playbackSpeed}: ${speedLabel(videoController.speed)}",
+                icon = if (withIcons) Icons.Outlined.Speed else null
+            ) { videoSpeedOpen = true },
+            com.example.amoledgallery.ui.design.MenuEntry(
+                if (videoController.looping) com.example.amoledgallery.ui.i18n.F.loopOn else com.example.amoledgallery.ui.i18n.F.loopOff,
+                icon = if (withIcons) Icons.Outlined.Repeat else null
+            ) { videoController.toggleLoop() }
+        )
+    }
     com.example.amoledgallery.ui.design.ThemedPopupMenu(
         expanded = showMoreMenu,
         onDismissRequest = { showMoreMenu = false },
@@ -765,6 +804,7 @@ fun MediaDetailScreen(
         entries = if (language == DesignLanguage.SAMSUNG_ONEUI) {
             // One UI: the ⋮ circle at the top right.
             buildList {
+                addAll(videoEntries(false))
                 add(com.example.amoledgallery.ui.design.MenuEntry(strings.copyToClipboard) {
                     context.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(
                         android.content.ClipData.newUri(context.contentResolver, currentItem.displayName, currentItem.uri)
@@ -780,6 +820,7 @@ fun MediaDetailScreen(
         } else if (isHyperOs) {
             // HyperOS: the "More" menu above the toolbar.
             buildList {
+                addAll(videoEntries(false))
                 if (actions.showRename) add(com.example.amoledgallery.ui.design.MenuEntry(strings.rename) { showRenameDialog = true })
                 // Photos become the wallpaper; videos and GIFs become a live wallpaper (see the sheet).
                 add(com.example.amoledgallery.ui.design.MenuEntry(strings.setAsWallpaper) { wallpaperItem = currentItem })
@@ -788,6 +829,7 @@ fun MediaDetailScreen(
             }
         } else {
             buildList {
+                addAll(videoEntries(true))
                 if (actions.showRename) {
                     add(com.example.amoledgallery.ui.design.MenuEntry(strings.rename, icon = Icons.Outlined.DriveFileRenameOutline) { showRenameDialog = true })
                 }
@@ -797,6 +839,29 @@ fun MediaDetailScreen(
             }
         }
     )
+
+    if (videoSpeedOpen) {
+        com.example.amoledgallery.ui.design.ThemedSheet(
+            onDismissRequest = { videoSpeedOpen = false },
+            title = com.example.amoledgallery.ui.i18n.F.playbackSpeed
+        ) {
+            com.example.amoledgallery.ui.design.ThemedListSection(
+                inSheet = true,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp),
+                rows = listOf(0.25f, 0.5f, 1f, 1.5f, 2f).map { speed ->
+                    com.example.amoledgallery.ui.design.ListRow(
+                        speedLabel(speed),
+                        value = if (speed == videoController.speed) "✓" else null,
+                        showChevron = false,
+                        onClick = {
+                            videoController.changeSpeed(speed)
+                            videoSpeedOpen = false
+                        }
+                    )
+                }
+            )
+        }
+    }
 
     // Set as wallpaper: which screen, in the current design's sheet; set in-app (see setWallpaper).
     wallpaperItem?.let { item ->
@@ -904,6 +969,8 @@ fun MediaDetailScreen(
         }
     }
 }
+
+private fun speedLabel(speed: Float): String = "${speed}×".replace(".0×", "×")
 
 /**
  * The photo decoded large enough to stay sharp when zoomed. By default it would be decoded at the screen size,
@@ -1237,6 +1304,8 @@ private class DetailActions(
     val onDeletePermanently: () -> Unit,
     /** False in the trash, where a deleted item cannot be renamed. */
     val showRename: Boolean,
+    /** iOS: whether the ⋯ menu has anything to offer (renaming, or a video's speed and loop). */
+    val showMore: Boolean,
     /** iOS: opens the ⋯ menu (anchored at the given bounds) holding the less frequent actions. */
     val onMore: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
     /** Whether the details are open; read only inside the toolbar, so only the toolbar recomposes. */
@@ -1323,8 +1392,8 @@ private fun DetailTopBar(
                 Text(dateTitle, color = palette.onBackground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 Text(timeText, color = palette.onBackground, fontSize = 13.sp, maxLines = 1)
             }
-            // Less frequent actions (rename) sit behind the ⋯ circle.
-            if (actions.showRename) {
+            // Less frequent actions (rename, a video's speed and loop) sit behind the ⋯ circle.
+            if (actions.showMore) {
                 var moreBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
                 GlassCircle(
                     Icons.Rounded.MoreHoriz,

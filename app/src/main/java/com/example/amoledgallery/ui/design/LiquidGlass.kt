@@ -43,7 +43,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.amoledgallery.ui.theme.DesignLanguage
 import com.example.amoledgallery.ui.theme.LocalAppTheme
@@ -81,8 +83,9 @@ internal class LiquidBackdrop(val layer: GraphicsLayer) {
     /**
      * Called by the source every time it records its content. The recording is drawn a second time inside each
      * lens, but the renderer tracks what changed inside it in the coordinates of its first (real) position, so a
-     * lens repainted only the strip matching that position and kept old content in the rest. Each lens swaps in
-     * a new render effect here, which makes the renderer repaint the whole lens in the same frame.
+     * lens repainted only the strip matching that position and kept old content in the rest. Each lens records
+     * itself again and swaps in a new render effect here, which makes the renderer repaint the whole lens in the
+     * same frame.
      */
     val lenses = java.util.Collections.newSetFromMap(java.util.WeakHashMap<LensRefresher, Boolean>())
 }
@@ -90,6 +93,49 @@ internal class LiquidBackdrop(val layer: GraphicsLayer) {
 /** Repaints one lens completely; see [LiquidBackdrop.lenses]. */
 internal fun interface LensRefresher {
     fun refresh()
+}
+
+/** What a lens last drew, so the source can have it recorded again without drawing the lens itself. */
+private class LensRecording {
+    var backdrop: LiquidBackdrop? = null
+    var density: Density? = null
+    var layoutDirection = LayoutDirection.Ltr
+    var size = IntSize.Zero
+    var pad = 0f
+    var offset = Offset.Zero
+
+    // The lens's shader uniforms; see [LensShader].
+    var width = 0f
+    var height = 0f
+    var radius = 0f
+    var thickness = 0f
+    var refraction = 0f
+    var dispersion = 0f
+    var touch = Offset.Zero
+    var press = 0f
+}
+
+/**
+ * One compiled lens program for every glass surface. Each control used to compile its own, 0.2-0.9 ms on the
+ * main thread apiece - six at once whenever the photo viewer opened. A render effect keeps a copy of the
+ * uniforms it was created with, so lenses share the shader by setting theirs right before creating one.
+ * Main thread only, like all drawing.
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private object LensShader {
+    val shader by lazy(LazyThreadSafetyMode.NONE) { RuntimeShader(LIQUID_GLASS_SHADER) }
+
+    fun effect(lens: LensRecording): AndroidRenderEffect {
+        val pad = lens.pad
+        shader.setFloatUniform("box", pad, pad, lens.width, lens.height)
+        shader.setFloatUniform("radius", lens.radius)
+        shader.setFloatUniform("thickness", lens.thickness)
+        shader.setFloatUniform("refraction", lens.refraction)
+        shader.setFloatUniform("dispersion", lens.dispersion)
+        shader.setFloatUniform("touch", lens.touch.x + pad, lens.touch.y + pad)
+        shader.setFloatUniform("press", lens.press)
+        return AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
+    }
 }
 
 /** Backdrop recordings by the HazeState that names the source, so glass can find what lies behind it. */
@@ -242,7 +288,6 @@ private fun Modifier.liquidLens(
     position: MutableState<Offset>
 ): Modifier {
     val lensLayer = rememberGraphicsLayer()
-    val shader = remember { RuntimeShader(LIQUID_GLASS_SHADER) }
     val density = LocalDensity.current
     // Barely any blur: Liquid Glass bends light rather than scattering it. A small saturation boost keeps the
     // content behind it vivid.
@@ -253,18 +298,34 @@ private fun Modifier.liquidLens(
             AndroidRenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP)
         )
     }
-    val tint = spec.tint.copy(alpha = spec.tint.alpha * 0.45f)
-    // A fresh effect object is a property change of the lens layer, which repaints it in full.
-    val refresher = remember(lensLayer, shader, baseEffect) {
+    // Most of the tint, not all of it: the bent content stays visible, but white labels stay readable over
+    // bright photos (at less than half of it the tab labels vanished over sky and snow).
+    val tint = spec.tint.copy(alpha = spec.tint.alpha * 0.8f)
+    val recording = remember { LensRecording() }
+    // A new display list makes the renderer redraw the lens's content in full, whatever its change tracking saw,
+    // and a fresh effect object carries the lens's current uniforms.
+    val refresher = remember(lensLayer, baseEffect) {
         LensRefresher {
-            lensLayer.renderEffect = AndroidRenderEffect.createChainEffect(
-                AndroidRenderEffect.createRuntimeShaderEffect(shader, "content"),
-                baseEffect
-            ).asComposeRenderEffect()
+            val backdrop = recording.backdrop ?: return@LensRefresher
+            val recordDensity = recording.density ?: return@LensRefresher
+            if (lensLayer.isReleased) return@LensRefresher
+            val offset = recording.offset
+            val pad = recording.pad
+            lensLayer.record(recordDensity, recording.layoutDirection, recording.size) {
+                translate(offset.x + pad, offset.y + pad) { drawLayer(backdrop.layer) }
+            }
+            // Refract first, then blur: the renderer only blurs the part of the content it expects to be read
+            // (about the clipped glass), so a lens fed the blurred content read uninitialised memory wherever its
+            // rim reached further out - a strip of coloured garbage along the bottom edge of the tab bar.
+            lensLayer.renderEffect = AndroidRenderEffect.createChainEffect(baseEffect, LensShader.effect(recording))
+                .asComposeRenderEffect()
         }
     }
     DisposableEffect(state, refresher) {
-        onDispose { LiquidBackdrops[state]?.lenses?.remove(refresher) }
+        onDispose {
+            LiquidBackdrops[state]?.lenses?.remove(refresher)
+            recording.backdrop = null
+        }
     }
 
     return drawWithContent {
@@ -283,26 +344,24 @@ private fun Modifier.liquidLens(
         val pad = ceil(thickness * refraction * (1f + dispersion) + 4.dp.toPx())
         val outline = shape.createOutline(size, layoutDirection, this)
         val radius = ((outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f).coerceAtMost(minDim / 2f)
-        val center = if (touch.point.isSpecified) touch.point else Offset(size.width / 2f, size.height / 2f)
 
-        shader.setFloatUniform("box", pad, pad, size.width, size.height)
-        shader.setFloatUniform("radius", radius)
-        shader.setFloatUniform("thickness", thickness)
-        shader.setFloatUniform("refraction", refraction)
-        shader.setFloatUniform("dispersion", dispersion)
-        shader.setFloatUniform("touch", center.x + pad, center.y + pad)
-        shader.setFloatUniform("press", touch.press.value)
+        recording.width = size.width
+        recording.height = size.height
+        recording.radius = radius
+        recording.thickness = thickness
+        recording.refraction = refraction
+        recording.dispersion = dispersion
+        recording.touch = if (touch.point.isSpecified) touch.point else Offset(size.width / 2f, size.height / 2f)
+        recording.press = touch.press.value
+        recording.backdrop = backdrop
+        // The backdrop's origin in this surface's coordinates. Read here, in the lens's own draw, so moving
+        // either one redraws the lens (and not the whole source, which also calls the refresher).
+        recording.offset = backdrop.position - position.value
+        recording.density = density
+        recording.layoutDirection = layoutDirection
+        recording.size = IntSize(ceil(size.width + pad * 2f).toInt(), ceil(size.height + pad * 2f).toInt())
+        recording.pad = pad
         refresher.refresh()
-
-        // The backdrop's origin in this surface's coordinates.
-        val offset = backdrop.position - position.value
-        lensLayer.record(
-            this,
-            layoutDirection,
-            IntSize(ceil(size.width + pad * 2f).toInt(), ceil(size.height + pad * 2f).toInt())
-        ) {
-            translate(offset.x + pad, offset.y + pad) { drawLayer(backdrop.layer) }
-        }
         translate(-pad, -pad) { drawLayer(lensLayer) }
         drawRect(tint)
         drawContent()

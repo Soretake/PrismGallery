@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -137,7 +138,8 @@ fun SearchScreen() {
     }
     FeaturePage(title = F.search, subtitle = if (query.isNotBlank()) F.results(results.size) else null) {
         val top = featureTopPadding()
-        Column(modifier = Modifier.fillMaxSize()) {
+        // Above the keyboard, so the last rows of the results can be scrolled into view while typing.
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
             Box(modifier = Modifier.padding(top = top - 8.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)) {
                 ThemedTextField(value = query, onValueChange = { query = it }, placeholder = F.searchHint, autoFocus = true)
             }

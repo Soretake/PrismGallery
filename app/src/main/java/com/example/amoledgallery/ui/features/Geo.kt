@@ -141,7 +141,8 @@ object LocationIndex {
     private val mutex = Mutex()
     private var cache: MutableMap<String, Pair<Double, Double>?>? = null
 
-    private fun file(context: Context) = File(context.cacheDir, "locations_v1.txt")
+    // v2: v1 could hold "no location" for photos read while the app was not yet allowed to see locations.
+    private fun file(context: Context) = File(context.cacheDir, "locations_v2.txt")
     private fun key(item: MediaItem) = "${item.id}:${item.dateModified}"
 
     private fun load(context: Context): MutableMap<String, Pair<Double, Double>?> {
@@ -199,9 +200,19 @@ object LocationIndex {
             val map = load(context)
             val result = HashMap<Long, Pair<Double, Double>>()
             var changed = false
+            // Without the permission Android hands out photos with their location blanked: "none found" then
+            // says nothing about the photo and must not be remembered, or Places stays empty after it is granted.
+            val mayReadLocations = androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_MEDIA_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
             items.forEachIndexed { index, item ->
                 val k = key(item)
-                val value = if (map.containsKey(k)) map[k] else read(context, item).also { map[k] = it; changed = true }
+                val value = if (map.containsKey(k)) map[k] else read(context, item).also {
+                    if (it != null || mayReadLocations || item.isVideo) {
+                        map[k] = it
+                        changed = true
+                    }
+                }
                 if (value != null) result[item.id] = value
                 if (index % 25 == 0) onProgress(index, items.size)
             }

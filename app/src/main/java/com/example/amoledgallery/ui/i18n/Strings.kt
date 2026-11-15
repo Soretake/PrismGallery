@@ -568,7 +568,9 @@ object GermanStrings : AppStrings {
     override val itemFallback = "Medium"
     override val deletePermanently = "Endgültig löschen"
     override val emptyTrashTitle = "Papierkorb leeren?"
-    override fun emptyTrashMessage(count: Int) = "Alle $count Elemente im Papierkorb werden dauerhaft gelöscht."
+    override fun emptyTrashMessage(count: Int) =
+        if (count == 1) "Das Element im Papierkorb wird dauerhaft gelöscht."
+        else "Alle $count Elemente im Papierkorb werden dauerhaft gelöscht."
 
     override val shareItem = "Medium teilen"
     override val shareMedia = "Medien teilen"
@@ -920,7 +922,9 @@ object EnglishStrings : AppStrings {
     override val itemFallback = "Item"
     override val deletePermanently = "Delete permanently"
     override val emptyTrashTitle = "Empty trash?"
-    override fun emptyTrashMessage(count: Int) = "All $count items in the trash will be deleted permanently."
+    override fun emptyTrashMessage(count: Int) =
+        if (count == 1) "The item in the trash will be deleted permanently."
+        else "All $count items in the trash will be deleted permanently."
 
     override val shareItem = "Share item"
     override val shareMedia = "Share media"

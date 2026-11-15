@@ -1,101 +1,198 @@
 package com.example.amoledgallery.ui.components
-import com.example.amoledgallery.ui.i18n.strings
 
-import android.view.ViewGroup
+import android.view.TextureView
 import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import coil3.compose.AsyncImage
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
+import androidx.media3.exoplayer.SeekParameters
+import coil3.compose.AsyncImage
 import com.example.amoledgallery.model.MediaItem
-import com.example.amoledgallery.ui.theme.AmoledBlack
-import com.example.amoledgallery.ui.theme.PureWhite
-import com.example.amoledgallery.ui.theme.TextMuted
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import java.util.Locale
+
+/** Speed, loop and sound of the viewer's video player, kept while the app runs. */
+object VideoSettings {
+    var speed = 1f
+    var loop = true
+    var muted = false
+}
 
 /**
- * Native Media3 ExoPlayer video viewer in pure AMOLED black:
- * - Direct hardware decoding via Media3
- * - Minimalist center Play/Pause control
- * - Minimalist bottom scrubber and timestamp overlay
- * - Plays as soon as it opens; stays paused only when paused with the button
-  * - Controls that belong to the viewer's: they appear and fade with its top and bottom bars
- * - Proper lifecycle cleanup
+ * What the viewer's controls need from the video on screen. The controls are drawn by the viewer, on top of its
+ * glass source and outside the zoom, so they talk to the player on the current page through this.
+ */
+@OptIn(UnstableApi::class)
+@Stable
+class VideoController {
+    private var player: ExoPlayer? = null
+
+    var isPlaying by mutableStateOf(false)
+        private set
+    var ended by mutableStateOf(false)
+        private set
+    var scrubbing by mutableStateOf(false)
+        private set
+    /** Read while drawing wherever possible: it changes on every frame while the controls are visible. */
+    var positionMs by mutableLongStateOf(0L)
+        private set
+    var durationMs by mutableLongStateOf(0L)
+        private set
+    var speed by mutableStateOf(VideoSettings.speed)
+        private set
+    var looping by mutableStateOf(VideoSettings.loop)
+        private set
+    var muted by mutableStateOf(VideoSettings.muted)
+        private set
+
+    /** Paused with the button: then it stays paused, also after coming back to the app. */
+    var pausedByUser by mutableStateOf(false)
+        private set
+    private var resumeAfterScrub = false
+
+    /** The icon to show: scrubbing pauses the video only for as long as the finger is down. */
+    val showsPause: Boolean get() = isPlaying || (scrubbing && resumeAfterScrub)
+
+    internal fun attach(player: ExoPlayer, fallbackDurationMs: Long) {
+        this.player = player
+        isPlaying = player.isPlaying
+        ended = false
+        scrubbing = false
+        pausedByUser = false
+        positionMs = 0L
+        durationMs = fallbackDurationMs
+    }
+
+    internal fun detach(player: ExoPlayer) {
+        if (this.player !== player) return
+        this.player = null
+        isPlaying = false
+        scrubbing = false
+    }
+
+    internal fun onIsPlayingChanged(playing: Boolean) {
+        isPlaying = playing
+    }
+
+    internal fun onPlaybackStateChanged(player: ExoPlayer, state: Int) {
+        if (state == Player.STATE_READY && player.duration > 0) durationMs = player.duration
+        ended = state == Player.STATE_ENDED
+    }
+
+    internal fun syncPosition(player: ExoPlayer) {
+        if (!scrubbing) positionMs = player.currentPosition
+    }
+
+    fun togglePlay() {
+        val player = player ?: return
+        if (player.isPlaying) {
+            pausedByUser = true
+            player.pause()
+        } else {
+            pausedByUser = false
+            // At the end of a video that doesn't loop, playing starts it over.
+            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+            player.play()
+        }
+    }
+
+    /** While the finger is down the picture follows it: key frames only, which is what can keep up. */
+    fun beginScrub() {
+        val player = player ?: return
+        if (scrubbing) return
+        resumeAfterScrub = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
+        scrubbing = true
+        player.pause()
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+    }
+
+    fun scrubTo(fraction: Float) {
+        val player = player ?: return
+        positionMs = (fraction.coerceIn(0f, 1f) * durationMs).toLong()
+        player.seekTo(positionMs)
+    }
+
+    fun endScrub() {
+        val player = player ?: return
+        if (!scrubbing) return
+        player.setSeekParameters(SeekParameters.EXACT)
+        player.seekTo(positionMs)
+        scrubbing = false
+        if (resumeAfterScrub) player.play()
+    }
+
+    fun changeSpeed(value: Float) {
+        speed = value
+        VideoSettings.speed = value
+        player?.setPlaybackSpeed(value)
+    }
+
+    fun toggleLoop() {
+        looping = !looping
+        VideoSettings.loop = looping
+        player?.repeatMode = if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+
+    fun toggleMute() {
+        muted = !muted
+        VideoSettings.muted = muted
+        player?.volume = if (muted) 0f else 1f
+    }
+}
+
+/**
+ * Native Media3 ExoPlayer video page in the viewer: plays as soon as it opens, and zooms like a photo (pinch or double
+ * tap, panning stops at the picture's edges). Offscreen pages show their thumbnail and hold no player or decoder.
+ *
+ * The picture is a TextureView: unlike the SurfaceView a PlayerView uses, it is drawn with the rest of the window, so
+ * it follows the zoom and the pull-to-close, and the glass controls on top can blur it.
  */
 @OptIn(UnstableApi::class)
 @Composable
 fun AmoledVideoPlayer(
     item: MediaItem,
     isActivePage: Boolean,
-    /** Play button and scrubber follow the viewer's bars, so everything fades together. */
+    controller: VideoController,
+    /** The position only has to be fresh on every frame while the controls showing it are visible. */
     controlsVisible: Boolean,
     onTap: () -> Unit,
-    /** Pausing brings the controls back, however they were hidden. */
-    onShowControls: () -> Unit,
-    onPlayingChange: (Boolean) -> Unit,
-    onScrubbingChange: (Boolean) -> Unit,
+    onZoomChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (!isActivePage) {
-        // Offscreen page in HorizontalPager: Render static thumbnail without allocating ExoPlayer or MediaCodec
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(androidx.compose.ui.graphics.Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
+    // From the file's own metadata until the decoder knows better.
+    var aspect by remember(item.id) { mutableFloatStateOf(item.displayAspectRatio) }
+    ZoomableBox(
+        modifier = modifier.background(Color.Black),
+        contentAspectRatio = aspect,
+        onSingleTap = onTap,
+        onZoomChange = onZoomChange
+    ) {
+        if (isActivePage) {
+            ActiveVideoPlayer(item, controller, controlsVisible, aspect) { aspect = it }
+        } else {
             AsyncImage(
                 model = item.thumbnail ?: item.uri,
                 contentDescription = null,
@@ -103,44 +200,20 @@ fun AmoledVideoPlayer(
                 modifier = Modifier.fillMaxSize()
             )
         }
-        return
     }
-
-    ActiveVideoPlayer(
-        item = item,
-        controlsVisible = controlsVisible,
-        onTap = onTap,
-        onShowControls = onShowControls,
-        onPlayingChange = onPlayingChange,
-        onScrubbingChange = onScrubbingChange,
-        modifier = modifier
-    )
 }
 
 @OptIn(UnstableApi::class)
 @Composable
 private fun ActiveVideoPlayer(
     item: MediaItem,
+    controller: VideoController,
     controlsVisible: Boolean,
-    onTap: () -> Unit,
-    onShowControls: () -> Unit,
-    onPlayingChange: (Boolean) -> Unit,
-    onScrubbingChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    aspect: Float,
+    onAspect: (Float) -> Unit
 ) {
     val context = LocalContext.current
-
-    var isPlaying by remember { mutableStateOf(false) }
     var isFirstFrameRendered by remember { mutableStateOf(false) }
-    var currentPositionMs by remember { mutableLongStateOf(0L) }
-    var durationMs by remember { mutableLongStateOf(item.durationMs) }
-    var isScrubbing by remember { mutableStateOf(false) }
-    /** Paused with the button: then it stays paused, also after coming back to the app. */
-    var pausedByUser by remember { mutableStateOf(false) }
-
-    var speed by remember { mutableStateOf(VideoSettings.speed) }
-    var looping by remember { mutableStateOf(VideoSettings.loop) }
-    var muted by remember { mutableStateOf(VideoSettings.muted) }
     val exoPlayer = remember(item.uri) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(Media3Item.fromUri(item.uri))
@@ -153,26 +226,20 @@ private fun ActiveVideoPlayer(
         }
     }
 
-    LaunchedEffect(isPlaying) { onPlayingChange(isPlaying) }
-    LaunchedEffect(isScrubbing) { onScrubbingChange(isScrubbing) }
-    val reportStopped by rememberUpdatedState(onPlayingChange)
-    DisposableEffect(Unit) { onDispose { reportStopped(false) } }
-
-    // Attach listener for playback state changes
     DisposableEffect(exoPlayer) {
+        controller.attach(exoPlayer, item.durationMs)
         val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
-            }
+            override fun onIsPlayingChanged(playing: Boolean) = controller.onIsPlayingChanged(playing)
 
             override fun onRenderedFirstFrame() {
                 isFirstFrameRendered = true
             }
 
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    val d = exoPlayer.duration
-                    if (d > 0) durationMs = d
+            override fun onPlaybackStateChanged(playbackState: Int) = controller.onPlaybackStateChanged(exoPlayer, playbackState)
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    onAspect(videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height)
                 }
             }
         }
@@ -180,6 +247,7 @@ private fun ActiveVideoPlayer(
 
         onDispose {
             exoPlayer.removeListener(listener)
+            controller.detach(exoPlayer)
             exoPlayer.release()
         }
     }
@@ -192,7 +260,7 @@ private fun ActiveVideoPlayer(
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
                 // Back in the app: carry on, unless the user had paused it themselves.
-                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> if (!pausedByUser) exoPlayer.play()
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> if (!controller.pausedByUser) exoPlayer.play()
                 else -> Unit
             }
         }
@@ -200,50 +268,20 @@ private fun ActiveVideoPlayer(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Continuous progress tracking while playing
-    LaunchedEffect(isPlaying, isScrubbing) {
-        while (isActive && isPlaying && !isScrubbing) {
-            currentPositionMs = exoPlayer.currentPosition
-            com.example.amoledgallery.ui.features.ViewerState.videoPositionMs = currentPositionMs
-            delay(150)
+    // Every frame for a smooth seek bar while it is visible; otherwise only often enough for "save this frame".
+    LaunchedEffect(exoPlayer, controlsVisible) {
+        while (isActive) {
+            controller.syncPosition(exoPlayer)
+            com.example.amoledgallery.ui.features.ViewerState.videoPositionMs = controller.positionMs
+            if (controlsVisible) withFrameMillis { } else delay(250)
         }
-        com.example.amoledgallery.ui.features.ViewerState.videoPositionMs = exoPlayer.currentPosition
     }
-    // Speed, loop and sound stay as chosen for the next video too.
-    LaunchedEffect(speed) { exoPlayer.setPlaybackSpeed(speed); VideoSettings.speed = speed }
-    LaunchedEffect(looping) {
-        exoPlayer.repeatMode = if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        VideoSettings.loop = looping
-    }
-    LaunchedEffect(muted) { exoPlayer.volume = if (muted) 0f else 1f; VideoSettings.muted = muted }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { onTap() }
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        // Media3 Player Surface
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setBackgroundColor(android.graphics.Color.BLACK)
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxSize()
+            factory = { ctx -> TextureView(ctx).also { exoPlayer.setVideoTextureView(it) } },
+            onRelease = { exoPlayer.clearVideoTextureView(it) },
+            modifier = if (aspect > 0f) Modifier.aspectRatio(aspect) else Modifier.fillMaxSize()
         )
 
         // Instant preview thumbnail before first frame is rendered
@@ -255,145 +293,5 @@ private fun ActiveVideoPlayer(
                 modifier = Modifier.fillMaxSize()
             )
         }
-
-        // Overlay Controls (Center Play/Pause + Bottom Scrubber)
-        AnimatedVisibility(
-            visible = controlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f))
-            ) {
-                // Center Play/Pause Button
-                IconButton(
-                    onClick = {
-                        if (isPlaying) {
-                            exoPlayer.pause()
-                            pausedByUser = true
-                            onShowControls()
-                        } else {
-                            pausedByUser = false
-                            exoPlayer.play()
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(68.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.55f))
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (isPlaying) strings.pause else strings.play,
-                        tint = PureWhite,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-
-                // Bottom Scrubber Bar & Time Info (Positioned above Detail Bar). Capped in width so it
-                // does not stretch across the whole screen in landscape.
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .widthIn(max = 560.dp)
-                        .fillMaxWidth()
-                        .padding(bottom = 76.dp)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp)
-                ) {
-                    // Speed, loop and sound.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        VideoChip(if (speed == 1f) "1×" else "${speed}×".replace(".0×", "×")) {
-                            val speeds = listOf(0.25f, 0.5f, 1f, 1.5f, 2f)
-                            speed = speeds[(speeds.indexOf(speed) + 1) % speeds.size]
-                        }
-                        VideoChip(if (looping) "↻ ${com.example.amoledgallery.ui.i18n.F.loop}" else "${com.example.amoledgallery.ui.i18n.F.loop}: ${com.example.amoledgallery.ui.i18n.F.off}") { looping = !looping }
-                        VideoChip(if (muted) com.example.amoledgallery.ui.i18n.F.unmute else com.example.amoledgallery.ui.i18n.F.mute) { muted = !muted }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTimestamp(currentPositionMs),
-                            color = PureWhite,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = formatTimestamp(durationMs),
-                            color = TextMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    val maxVal = durationMs.toFloat().coerceAtLeast(1f)
-                    val sliderVal = currentPositionMs.toFloat().coerceIn(0f, maxVal)
-
-                    Slider(
-                        value = sliderVal,
-                        onValueChange = { newPos ->
-                            isScrubbing = true
-                            currentPositionMs = newPos.toLong()
-                        },
-                        onValueChangeFinished = {
-                            exoPlayer.seekTo(currentPositionMs)
-                            isScrubbing = false
-                        },
-                        valueRange = 0f..maxVal,
-                        colors = SliderDefaults.colors(
-                            thumbColor = PureWhite,
-                            activeTrackColor = PureWhite,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Speed, loop and sound of the viewer's video player, kept while the app runs. */
-object VideoSettings {
-    var speed = 1f
-    var loop = true
-    var muted = false
-}
-
-@Composable
-private fun VideoChip(text: String, onClick: () -> Unit) {
-    Text(
-        text = text,
-        color = PureWhite,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.45f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    )
-}
-
-private fun formatTimestamp(ms: Long): String {
-    val totalSeconds = (ms / 1000).coerceAtLeast(0)
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 }

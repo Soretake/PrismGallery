@@ -178,8 +178,18 @@ fun GalleryScreen(
     // iOS Photos shows its library in chronological order: oldest first, the newest photo last. The grid,
     // drag selection and the fullscreen viewer all work on this displayed order.
     val displayItems = remember(items, isIos) { if (isIos) items.asReversed() else items }
-    val screenTitle = if (isIos && onBackClick == null) strings.tabLibrary else title
-    val countText = if (isIos) strings.objects(items.size) else strings.items(items.size)
+    // The title and count name what the filter leaves in the grid, not "Bilder" whatever is shown.
+    val screenTitle = when {
+        isIos && onBackClick == null -> strings.tabLibrary
+        selectedFilter == MediaFilter.ALL -> title
+        else -> selectedFilter.displayLabel
+    }
+    val countText = when (selectedFilter) {
+        MediaFilter.ALL -> if (isIos) strings.objects(items.size) else strings.items(items.size)
+        MediaFilter.IMAGES -> com.example.amoledgallery.ui.i18n.F.imageCount(items.size)
+        MediaFilter.VIDEOS -> com.example.amoledgallery.ui.i18n.F.videoCount(items.size)
+        MediaFilter.GIFS -> com.example.amoledgallery.ui.i18n.F.gifCount(items.size)
+    }
     // While the fullscreen viewer covers everything, the grid below it is not drawn at all.
     var gridCoveredByViewer by remember { mutableStateOf(false) }
 

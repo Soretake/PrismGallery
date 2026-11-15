@@ -58,6 +58,12 @@ val LocalRootHaze = staticCompositionLocalOf<HazeState?> { null }
  */
 val LocalEnclosingHazeSources = staticCompositionLocalOf<Set<HazeState>> { emptySet() }
 
+/**
+ * Whether the tab around the current composition is the one on screen. All tabs stay composed (MainActivity), so
+ * endless animations check this to stop asking for frames while their tab is hidden.
+ */
+val LocalTabVisible = compositionLocalOf { true }
+
 /** A Box whose content becomes the blur backdrop [state]; glass inside it won't try to blur it. */
 @Composable
 fun HazeSource(
