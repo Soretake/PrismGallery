@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -82,6 +83,7 @@ internal fun GoogleMenuContent(
     loadStorageStats: suspend () -> MediaRepository.MediaStorageStats?,
     favoriteCount: Int,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     storageText: String,
     usedFraction: Float,
     appVersionName: String,
@@ -141,7 +143,7 @@ internal fun GoogleMenuContent(
         Spacer(modifier = Modifier.height(18.dp))
         SectionLabel(strings.library)
         DrawerRow(Icons.Outlined.FavoriteBorder, strings.favorites, "$favoriteCount", onOpenFavorites)
-        DrawerRow(Icons.Outlined.Delete, strings.trash, "$trashedCount", onOpenTrash)
+        DrawerRow(Icons.Outlined.Delete, strings.trash, "$trashedCount", onOpenTrash, trailingIcon = if (trashLockEnabled) Icons.Rounded.Lock else null)
         DrawerRow(Icons.Outlined.ContentCopy, strings.duplicates, null, onOpenDuplicates)
         Spacer(modifier = Modifier.height(14.dp))
         SectionLabel("App")
@@ -152,7 +154,13 @@ internal fun GoogleMenuContent(
 }
 
 @Composable
-private fun DrawerRow(icon: ImageVector, title: String, value: String?, onClick: () -> Unit) {
+private fun DrawerRow(
+    icon: ImageVector,
+    title: String,
+    value: String?,
+    onClick: () -> Unit,
+    trailingIcon: ImageVector? = null
+) {
     val palette = LocalAppTheme.current.palette
     Row(
         modifier = Modifier
@@ -165,6 +173,10 @@ private fun DrawerRow(icon: ImageVector, title: String, value: String?, onClick:
         Icon(icon, null, tint = palette.onBackground, modifier = Modifier.size(26.dp))
         Spacer(modifier = Modifier.width(24.dp))
         Text(title, color = palette.onBackground, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (trailingIcon != null) {
+            Icon(trailingIcon, null, tint = palette.textMuted, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+        }
         if (value != null) {
             Text(value, color = palette.textMuted, fontSize = 16.sp, maxLines = 1)
         }
@@ -193,8 +205,10 @@ internal fun GoogleSettingsPage(
     sdCardTotalBytes: Long?,
     appVersionName: String,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     graphicsQuality: PerformanceProfile,
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    onToggleTrashLock: (Boolean) -> Unit = {},
     loadStorageStats: suspend () -> MediaRepository.MediaStorageStats?,
     onEmptyTrash: () -> Unit,
     onOpenLibrary: () -> Unit,
@@ -235,7 +249,7 @@ internal fun GoogleSettingsPage(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             when (section) {
                 SettingsSection.DESIGN -> AppearanceContent()
-                SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality)
+                SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality, trashLockEnabled, onToggleTrashLock)
                 SettingsSection.STORAGE -> StorageContent(
                     internalFreeBytes, internalTotalBytes, sdCardFreeBytes, sdCardTotalBytes,
                     trashedCount, loadStorageStats, onEmptyTrash, onOpenLibrary, onOpenTrash
@@ -327,14 +341,46 @@ private fun AppearanceContent() {
 }
 
 @Composable
-private fun GeneralContent(graphicsQuality: PerformanceProfile, onSetGraphicsQuality: (PerformanceProfile) -> Unit) {
+private fun GeneralContent(
+    graphicsQuality: PerformanceProfile,
+    onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    trashLockEnabled: Boolean = true,
+    onToggleTrashLock: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
+    val palette = LocalAppTheme.current.palette
     SectionLabel(strings.language)
     ChoiceList(AppLanguage.entries, LanguageState.language, { it.displayName }) { LanguageState.apply(it, context) }
     Footer(strings.languageFooterText)
     SectionLabel(strings.graphicsQuality)
     ChoiceList(PerformanceProfile.entries, graphicsQuality, { graphicsQualityLabel(it) }) { onSetGraphicsQuality(it) }
     Footer(strings.qualityDescription(graphicsQuality))
+    SectionLabel(strings.lockTrashSetting)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(palette.surface)
+            .clickable { onToggleTrashLock(!trashLockEnabled) }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(strings.lockTrashSetting, color = palette.onBackground, fontSize = 17.sp)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(strings.lockTrashSettingSubtitle, color = palette.textMuted, fontSize = 13.sp)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        androidx.compose.material3.Switch(
+            checked = trashLockEnabled,
+            onCheckedChange = onToggleTrashLock,
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedThumbColor = palette.onAccent,
+                checkedTrackColor = palette.accent
+            )
+        )
+    }
+    Footer(strings.lockTrashSettingSubtitle)
 }
 
 @Composable

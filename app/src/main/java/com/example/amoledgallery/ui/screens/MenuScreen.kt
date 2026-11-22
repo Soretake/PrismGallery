@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
@@ -125,6 +126,8 @@ fun MenuScreen(
     appVersionName: String = "",
     graphicsQuality: PerformanceProfile = PerformanceProfile.MEDIUM,
     onSetGraphicsQuality: (PerformanceProfile) -> Unit = {},
+    trashLockEnabled: Boolean = true,
+    onToggleTrashLock: (Boolean) -> Unit = {},
     onOpenFavorites: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenDuplicates: () -> Unit = {},
@@ -252,6 +255,7 @@ fun MenuScreen(
                         DesignLanguage.SAMSUNG_ONEUI -> OneUiMenuContent(
                             favoriteCount = favoriteCount,
                             trashedCount = trashedCount,
+                            trashLockEnabled = trashLockEnabled,
                             storageValue = storageText,
                             appVersionName = appVersionName,
                             onOpenFavorites = onOpenFavorites,
@@ -272,6 +276,7 @@ fun MenuScreen(
                             loadStorageStats = loadStorageStats,
                             favoriteCount = favoriteCount,
                             trashedCount = trashedCount,
+                            trashLockEnabled = trashLockEnabled,
                             storageText = storageText,
                             usedFraction = usedFraction,
                             appVersionName = appVersionName,
@@ -289,7 +294,13 @@ fun MenuScreen(
                             ThemedListSection(
                                 rows = listOf(
                                     ListRow(strings.favorites, icon = Icons.Rounded.Favorite, value = "$favoriteCount", onClick = onOpenFavorites),
-                                    ListRow(strings.recentlyDeleted, icon = Icons.Rounded.Delete, value = "$trashedCount", onClick = onOpenTrash),
+                                    ListRow(
+                                        strings.recentlyDeleted,
+                                        icon = Icons.Rounded.Delete,
+                                        value = "$trashedCount",
+                                        trailingIcon = if (trashLockEnabled) Icons.Rounded.Lock else null,
+                                        onClick = onOpenTrash
+                                    ),
                                     ListRow(strings.duplicates, icon = Icons.Rounded.ContentCopy, onClick = onOpenDuplicates)
                                 )
                             )
@@ -306,6 +317,7 @@ fun MenuScreen(
                         DesignLanguage.XIAOMI_HYPEROS -> HyperOsMenuContent(
                             favoriteCount = favoriteCount,
                             trashedCount = trashedCount,
+                            trashLockEnabled = trashLockEnabled,
                             storageValue = if (internalTotalBytes > 0) strings.free(formatBytes(internalFreeBytes)) else null,
                             appVersionName = appVersionName,
                             onOpenFavorites = onOpenFavorites,
@@ -348,8 +360,10 @@ fun MenuScreen(
                         sdCardTotalBytes = sdCardTotalBytes,
                         appVersionName = appVersionName,
                         trashedCount = trashedCount,
+                        trashLockEnabled = trashLockEnabled,
                         graphicsQuality = graphicsQuality,
                         onSetGraphicsQuality = onSetGraphicsQuality,
+                        onToggleTrashLock = onToggleTrashLock,
                         loadStorageStats = loadStorageStats,
                         onEmptyTrash = onEmptyTrash,
                         onOpenLibrary = onOpenLibrary
@@ -364,8 +378,10 @@ fun MenuScreen(
                         sdCardTotalBytes = sdCardTotalBytes,
                         appVersionName = appVersionName,
                         trashedCount = trashedCount,
+                        trashLockEnabled = trashLockEnabled,
                         graphicsQuality = graphicsQuality,
                         onSetGraphicsQuality = onSetGraphicsQuality,
+                        onToggleTrashLock = onToggleTrashLock,
                         loadStorageStats = loadStorageStats,
                         onEmptyTrash = onEmptyTrash,
                         onOpenLibrary = onOpenLibrary,
@@ -381,8 +397,10 @@ fun MenuScreen(
                         sdCardTotalBytes = sdCardTotalBytes,
                         appVersionName = appVersionName,
                         trashedCount = trashedCount,
+                        trashLockEnabled = trashLockEnabled,
                         graphicsQuality = graphicsQuality,
                         onSetGraphicsQuality = onSetGraphicsQuality,
+                        onToggleTrashLock = onToggleTrashLock,
                         loadStorageStats = loadStorageStats,
                         onEmptyTrash = onEmptyTrash,
                         onOpenLibrary = onOpenLibrary,
@@ -398,8 +416,10 @@ fun MenuScreen(
                         sdCardTotalBytes = sdCardTotalBytes,
                         appVersionName = appVersionName,
                         trashedCount = trashedCount,
+                        trashLockEnabled = trashLockEnabled,
                         graphicsQuality = graphicsQuality,
                         onSetGraphicsQuality = onSetGraphicsQuality,
+                        onToggleTrashLock = onToggleTrashLock,
                         loadStorageStats = loadStorageStats,
                         onEmptyTrash = onEmptyTrash,
                         onOpenLibrary = onOpenLibrary,
@@ -420,6 +440,8 @@ fun MenuScreen(
             appVersionName = appVersionName,
             graphicsQuality = graphicsQuality,
             onSetGraphicsQuality = onSetGraphicsQuality,
+            trashLockEnabled = trashLockEnabled,
+            onToggleTrashLock = onToggleTrashLock,
             onDismiss = { settingsSection = null }
         )
     }
@@ -460,6 +482,8 @@ private fun SettingsSheet(
     appVersionName: String,
     graphicsQuality: PerformanceProfile,
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    trashLockEnabled: Boolean = true,
+    onToggleTrashLock: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -569,6 +593,32 @@ private fun SettingsSheet(
                     lineHeight = 17.sp,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
+                Spacer(modifier = Modifier.height(22.dp))
+                ThemedSectionHeader(strings.lockTrashSetting)
+                ThemedCard {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleTrashLock(!trashLockEnabled) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(strings.lockTrashSetting, color = palette.onBackground, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(strings.lockTrashSettingSubtitle, color = palette.textMuted, fontSize = 13.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        androidx.compose.material3.Switch(
+                            checked = trashLockEnabled,
+                            onCheckedChange = onToggleTrashLock,
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = palette.onAccent,
+                                checkedTrackColor = palette.accent
+                            )
+                        )
+                    }
+                }
             }
 
             Column(modifier = Modifier.sectionAnchor(SettingsSection.STORAGE)) {

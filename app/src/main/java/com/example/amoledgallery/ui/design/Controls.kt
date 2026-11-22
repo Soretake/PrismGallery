@@ -484,6 +484,7 @@ data class ListRow(
     /** Brand color of this row's icon (filled square on iOS, tonal cookie on Material, flat tint elsewhere). */
     val iconColor: Color = Color.Unspecified,
     val value: String? = null,
+    val trailingIcon: ImageVector? = null,
     val showChevron: Boolean = true,
     val onClick: (() -> Unit)? = null,
     /** Overrides the title color, e.g. [com.example.amoledgallery.ui.theme.destructive] for delete rows. */
@@ -672,6 +673,16 @@ private fun ListRowContent(row: ListRow) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+
+        if (row.trailingIcon != null) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = row.trailingIcon,
+                contentDescription = null,
+                tint = palette.textMuted,
+                modifier = Modifier.size(17.dp)
+            )
         }
 
         if (row.value != null) {

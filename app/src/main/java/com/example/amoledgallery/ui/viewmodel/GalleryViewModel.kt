@@ -107,8 +107,33 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val selectedFilter: StateFlow<MediaFilter> = _selectedFilter.asStateFlow()
 
     // Trash View state
+    private val securityPrefs = application.getSharedPreferences("amoled_gallery_security_prefs", Context.MODE_PRIVATE)
+    private val KEY_TRASH_LOCK_ENABLED = "trash_lock_enabled"
+
     private val _isTrashOpen = MutableStateFlow(false)
     val isTrashOpen: StateFlow<Boolean> = _isTrashOpen.asStateFlow()
+
+    private val _isTrashLockEnabled = MutableStateFlow(securityPrefs.getBoolean(KEY_TRASH_LOCK_ENABLED, true))
+    val isTrashLockEnabled: StateFlow<Boolean> = _isTrashLockEnabled.asStateFlow()
+
+    private val _isTrashUnlocked = MutableStateFlow(false)
+    val isTrashUnlocked: StateFlow<Boolean> = _isTrashUnlocked.asStateFlow()
+
+    fun setTrashLockEnabled(enabled: Boolean) {
+        _isTrashLockEnabled.value = enabled
+        securityPrefs.edit().putBoolean(KEY_TRASH_LOCK_ENABLED, enabled).apply()
+        if (enabled) {
+            _isTrashUnlocked.value = false
+        }
+    }
+
+    fun unlockTrash() {
+        _isTrashUnlocked.value = true
+    }
+
+    fun lockTrash() {
+        _isTrashUnlocked.value = false
+    }
 
     // ---- Duplicates: files that are byte for byte the same -----------------------------------------
     private val duplicateFinder = com.example.amoledgallery.data.DuplicateFinder(application)
@@ -712,6 +737,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun openTrash() {
         clearSelection()
+        _isTrashUnlocked.value = false
         _isTrashOpen.value = true
         loadTrash()
     }
@@ -1022,6 +1048,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      * Permanently deletes all items in trash.
      */
     fun emptyTrash() {
+        if (_isTrashLockEnabled.value && !_isTrashUnlocked.value) return
         viewModelScope.launch {
             val uris = _trashedMediaState.value.map { it.uri }
             if (uris.isEmpty()) return@launch

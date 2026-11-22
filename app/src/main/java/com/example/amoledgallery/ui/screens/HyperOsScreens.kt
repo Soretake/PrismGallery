@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
@@ -83,6 +84,7 @@ import com.example.amoledgallery.ui.theme.DesignLanguage
 import com.example.amoledgallery.ui.theme.LocalAppTheme
 import com.example.amoledgallery.ui.theme.ThemeState
 import com.example.amoledgallery.ui.theme.isLight
+import com.example.amoledgallery.ui.theme.onAccent
 import com.example.amoledgallery.ui.theme.presetsFor
 
 /*
@@ -221,6 +223,7 @@ private fun MediaMosaic(items: List<MediaItem>, grid: Int) {
 internal fun HyperOsMenuContent(
     favoriteCount: Int,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     storageValue: String?,
     appVersionName: String,
     onOpenFavorites: () -> Unit,
@@ -235,7 +238,14 @@ internal fun HyperOsMenuContent(
     Column(modifier = Modifier.fillMaxWidth()) {
         HyperOsSectionLabel(strings.organizePhotos, Modifier.padding(start = 28.dp, end = 28.dp, top = 4.dp, bottom = 6.dp))
         HyperOsIconRow(Icons.Rounded.Favorite, Color(0xFFFF5C7A), strings.favorites, value = "$favoriteCount", onClick = onOpenFavorites)
-        HyperOsIconRow(Icons.Rounded.Delete, palette.accent, strings.recentlyDeleted, value = "$trashedCount", onClick = onOpenTrash)
+        HyperOsIconRow(
+            Icons.Rounded.Delete,
+            palette.accent,
+            strings.recentlyDeleted,
+            value = "$trashedCount",
+            trailingIcon = if (trashLockEnabled) Icons.Rounded.Lock else null,
+            onClick = onOpenTrash
+        )
         HyperOsIconRow(Icons.Rounded.ContentCopy, Color(0xFF00A9A5), strings.duplicates, onClick = onOpenDuplicates)
         HyperOsIconRow(Icons.Rounded.Storage, Color(0xFF8A90A6), strings.storage, value = storageValue, onClick = onOpenStorage)
         HyperOsDivider(Modifier.padding(horizontal = 28.dp, vertical = 16.dp))
@@ -261,8 +271,10 @@ internal fun HyperOsSettingsPage(
     sdCardTotalBytes: Long?,
     appVersionName: String,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     graphicsQuality: PerformanceProfile,
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    onToggleTrashLock: (Boolean) -> Unit = {},
     loadStorageStats: suspend () -> MediaRepository.MediaStorageStats?,
     onEmptyTrash: () -> Unit,
     onOpenLibrary: () -> Unit,
@@ -304,7 +316,7 @@ internal fun HyperOsSettingsPage(
         )
         when (section) {
             SettingsSection.DESIGN -> AppearanceContent()
-            SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality)
+            SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality, trashLockEnabled, onToggleTrashLock)
             SettingsSection.STORAGE -> StorageContent(
                 internalFreeBytes, internalTotalBytes, sdCardFreeBytes, sdCardTotalBytes,
                 trashedCount, loadStorageStats, onEmptyTrash, onOpenLibrary, onOpenTrash
@@ -370,8 +382,14 @@ private fun AppearanceContent() {
 }
 
 @Composable
-private fun GeneralContent(graphicsQuality: PerformanceProfile, onSetGraphicsQuality: (PerformanceProfile) -> Unit) {
+private fun GeneralContent(
+    graphicsQuality: PerformanceProfile,
+    onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    trashLockEnabled: Boolean = true,
+    onToggleTrashLock: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
+    val palette = LocalAppTheme.current.palette
     Label(strings.language)
     ChoiceCard(
         options = AppLanguage.entries,
@@ -387,6 +405,33 @@ private fun GeneralContent(graphicsQuality: PerformanceProfile, onSetGraphicsQua
         label = { graphicsQualityLabel(it) }
     ) { onSetGraphicsQuality(it) }
     Footer(strings.qualityDescription(graphicsQuality))
+
+    Label(strings.lockTrashSetting)
+    Card {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleTrashLock(!trashLockEnabled) }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(strings.lockTrashSetting, color = palette.onBackground, fontSize = 17.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(strings.lockTrashSettingSubtitle, color = palette.textMuted, fontSize = 13.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            androidx.compose.material3.Switch(
+                checked = trashLockEnabled,
+                onCheckedChange = onToggleTrashLock,
+                colors = androidx.compose.material3.SwitchDefaults.colors(
+                    checkedThumbColor = palette.onAccent,
+                    checkedTrackColor = palette.accent
+                )
+            )
+        }
+    }
+    Footer(strings.lockTrashSettingSubtitle)
 }
 
 @Composable
