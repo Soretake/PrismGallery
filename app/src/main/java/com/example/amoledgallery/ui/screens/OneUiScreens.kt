@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
@@ -80,6 +81,7 @@ import com.example.amoledgallery.ui.theme.DesignLanguage
 import com.example.amoledgallery.ui.theme.LocalAppTheme
 import com.example.amoledgallery.ui.theme.ThemeState
 import com.example.amoledgallery.ui.theme.isLight
+import com.example.amoledgallery.ui.theme.onAccent
 import com.example.amoledgallery.ui.theme.presetsFor
 
 /*
@@ -92,7 +94,7 @@ import com.example.amoledgallery.ui.theme.presetsFor
 // Menü popup
 // ---------------------------------------------------------------------------------------------
 
-private data class PopupAction(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+private data class PopupAction(val icon: ImageVector, val label: String, val onClick: () -> Unit, val isLocked: Boolean = false)
 
 /** Samsung Gallery's "Menü": a card at the bottom of the screen with round icon buttons. */
 @Composable
@@ -102,7 +104,8 @@ fun OneUiMenuPopup(
     onFavorites: () -> Unit,
     onRecent: () -> Unit,
     onTrash: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    trashLockEnabled: Boolean = true
 ) {
     OverlayWindow { transition ->
         val palette = LocalAppTheme.current.palette
@@ -116,7 +119,7 @@ fun OneUiMenuPopup(
             PopupAction(Icons.Outlined.SmartDisplay, strings.legendVideos, onVideos),
             PopupAction(Icons.Outlined.FavoriteBorder, strings.favorites, onFavorites),
             PopupAction(Icons.Outlined.Schedule, strings.recent, onRecent),
-            PopupAction(Icons.Outlined.Delete, strings.trash, onTrash),
+            PopupAction(Icons.Outlined.Delete, strings.trash, onTrash, isLocked = trashLockEnabled),
             PopupAction(Icons.Outlined.Settings, strings.settings, onSettings)
         )
         val light = palette.isLight
@@ -172,6 +175,19 @@ fun OneUiMenuPopup(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(action.icon, null, tint = palette.onBackground, modifier = Modifier.size(28.dp))
+                                    if (action.isLocked) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(3.dp)
+                                                .size(18.dp)
+                                                .clip(CircleShape)
+                                                .background(palette.accent),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.Lock, null, tint = palette.onAccent, modifier = Modifier.size(11.dp))
+                                        }
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(10.dp))
                                 // One line that shrinks to fit: long words like "Einstellungen" would otherwise break mid-word.
@@ -204,6 +220,7 @@ fun OneUiMenuPopup(
 internal fun OneUiMenuContent(
     favoriteCount: Int,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     storageValue: String?,
     appVersionName: String,
     onOpenFavorites: () -> Unit,
@@ -218,7 +235,14 @@ internal fun OneUiMenuContent(
         Card {
             IconRow(Icons.Rounded.Favorite, Color(0xFFF2586E), strings.favorites, strings.items(favoriteCount), onOpenFavorites)
             Divider(start = 78.dp)
-            IconRow(Icons.Rounded.Delete, Color(0xFFF4731F), strings.trash, strings.items(trashedCount), onOpenTrash)
+            IconRow(
+                Icons.Rounded.Delete,
+                Color(0xFFF4731F),
+                strings.trash,
+                strings.items(trashedCount),
+                onOpenTrash,
+                trailingIcon = if (trashLockEnabled) Icons.Rounded.Lock else null
+            )
             Divider(start = 78.dp)
             IconRow(Icons.Rounded.ContentCopy, Color(0xFF00A9A5), strings.duplicates, strings.duplicatesSubtitle, onOpenDuplicates)
         }
@@ -236,7 +260,14 @@ internal fun OneUiMenuContent(
 }
 
 @Composable
-private fun IconRow(icon: ImageVector, color: Color, title: String, subtitle: String?, onClick: () -> Unit) {
+private fun IconRow(
+    icon: ImageVector,
+    color: Color,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    trailingIcon: ImageVector? = null
+) {
     val palette = LocalAppTheme.current.palette
     Row(
         modifier = Modifier
@@ -261,6 +292,10 @@ private fun IconRow(icon: ImageVector, color: Color, title: String, subtitle: St
                 Text(subtitle, color = palette.accent, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        if (trailingIcon != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(trailingIcon, null, tint = palette.textMuted, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -278,8 +313,10 @@ internal fun OneUiSettingsPage(
     sdCardTotalBytes: Long?,
     appVersionName: String,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     graphicsQuality: PerformanceProfile,
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    onToggleTrashLock: (Boolean) -> Unit = {},
     loadStorageStats: suspend () -> MediaRepository.MediaStorageStats?,
     onEmptyTrash: () -> Unit,
     onOpenLibrary: () -> Unit,
@@ -347,7 +384,7 @@ internal fun OneUiSettingsPage(
         ) {
             when (section) {
                 SettingsSection.DESIGN -> AppearanceContent()
-                SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality)
+                SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality, trashLockEnabled, onToggleTrashLock)
                 SettingsSection.STORAGE -> StorageContent(
                     internalFreeBytes, internalTotalBytes, sdCardFreeBytes, sdCardTotalBytes,
                     trashedCount, loadStorageStats, onEmptyTrash, onOpenLibrary, onOpenTrash
@@ -415,14 +452,46 @@ private fun AppearanceContent() {
 }
 
 @Composable
-private fun GeneralContent(graphicsQuality: PerformanceProfile, onSetGraphicsQuality: (PerformanceProfile) -> Unit) {
+private fun GeneralContent(
+    graphicsQuality: PerformanceProfile,
+    onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    trashLockEnabled: Boolean = true,
+    onToggleTrashLock: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
+    val palette = LocalAppTheme.current.palette
     Header(strings.language)
     ChoiceCard(AppLanguage.entries, LanguageState.language, { it.displayName }) { LanguageState.apply(it, context) }
     Footer(strings.languageFooterText)
     Header(strings.graphicsQuality)
     ChoiceCard(PerformanceProfile.entries, graphicsQuality, { graphicsQualityLabel(it) }) { onSetGraphicsQuality(it) }
     Footer(strings.qualityDescription(graphicsQuality))
+    Header(strings.lockTrashSetting)
+    Card {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleTrashLock(!trashLockEnabled) }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(strings.lockTrashSetting, color = palette.onBackground, fontSize = 17.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(strings.lockTrashSettingSubtitle, color = palette.textMuted, fontSize = 13.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            androidx.compose.material3.Switch(
+                checked = trashLockEnabled,
+                onCheckedChange = onToggleTrashLock,
+                colors = androidx.compose.material3.SwitchDefaults.colors(
+                    checkedThumbColor = palette.onAccent,
+                    checkedTrackColor = palette.accent
+                )
+            )
+        }
+    }
+    Footer(strings.lockTrashSettingSubtitle)
 }
 
 @Composable

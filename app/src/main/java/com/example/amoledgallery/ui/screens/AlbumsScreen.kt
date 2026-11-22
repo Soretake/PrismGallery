@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PhoneAndroid
@@ -925,11 +926,16 @@ fun AlbumsScreen(
                                 Column(modifier = Modifier.padding(top = 8.dp)) {
                                     HyperOsDivider()
                                     HyperOsSectionLabel(strings.organizePhotos, Modifier.padding(top = 22.dp, bottom = 6.dp))
+                                    val isTrashLocked = remember(context) {
+                                        context.getSharedPreferences("amoled_gallery_security_prefs", android.content.Context.MODE_PRIVATE)
+                                            .getBoolean("trash_lock_enabled", true)
+                                    }
                                     HyperOsIconRow(
                                         icon = Icons.Rounded.Delete,
                                         iconColor = palette.accent,
                                         title = strings.recentlyDeleted,
                                         value = "$trashedCount",
+                                        trailingIcon = if (isTrashLocked) Icons.Rounded.Lock else null,
                                         horizontalPadding = 0.dp,
                                         onClick = onOpenTrash
                                     )

@@ -10,6 +10,9 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import com.example.amoledgallery.util.BiometricAuthHelper
+import com.example.amoledgallery.util.BiometricAuthHelper.findFragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -113,7 +116,7 @@ import kotlinx.coroutines.withContext
 /** Screens pushed over the main tabs. */
 private enum class PushedScreen { FAVORITES, TRASH, DUPLICATES }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: GalleryViewModel by viewModels()
 
@@ -256,6 +259,9 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
     val currentSubAlbums by viewModel.currentSubAlbums.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val isTrashOpen by viewModel.isTrashOpen.collectAsStateWithLifecycle()
+    val isTrashLockEnabled by viewModel.isTrashLockEnabled.collectAsStateWithLifecycle()
+    val isTrashUnlocked by viewModel.isTrashUnlocked.collectAsStateWithLifecycle()
+    val isTrashCurrentlyLocked = isTrashLockEnabled && !isTrashUnlocked
     val isDuplicatesOpen by viewModel.isDuplicatesOpen.collectAsStateWithLifecycle()
     val duplicateGroups by viewModel.duplicateGroups.collectAsStateWithLifecycle()
     val duplicateSelection by viewModel.duplicateSelection.collectAsStateWithLifecycle()
@@ -335,6 +341,46 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
         }
     }
 
+    val onToggleTrashLock: (Boolean) -> Unit = remember(viewModel, context) {
+        { enable ->
+            if (enable) {
+                viewModel.setTrashLockEnabled(true)
+            } else {
+                val fragmentActivity = context.findFragmentActivity()
+                if (fragmentActivity != null) {
+                    BiometricAuthHelper.authenticate(
+                        activity = fragmentActivity,
+                        title = strings.unlockTrashTitle,
+                        subtitle = strings.unlockTrashSubtitle,
+                        onSuccess = {
+                            viewModel.setTrashLockEnabled(false)
+                        },
+                        onError = { _, _ -> }
+                    )
+                } else {
+                    viewModel.setTrashLockEnabled(false)
+                }
+            }
+        }
+    }
+
+    val requestTrashUnlock: () -> Unit = remember(viewModel, context) {
+        {
+            val fragmentActivity = context.findFragmentActivity()
+            if (fragmentActivity != null) {
+                BiometricAuthHelper.authenticate(
+                    activity = fragmentActivity,
+                    title = strings.unlockTrashTitle,
+                    subtitle = strings.unlockTrashSubtitle,
+                    onSuccess = {
+                        viewModel.unlockTrash()
+                    },
+                    onError = { _, _ -> }
+                )
+            }
+        }
+    }
+
     // Check permissions on start and when resuming from settings
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -344,6 +390,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                 // Files other apps wrote past MediaStore (downloads, file managers) are indexed now
                 // instead of whenever the system next gets round to it.
                 if (hasPerm) viewModel.rescanMediaFolders()
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.lockTrash()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -401,6 +449,12 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
             label = "push_screen"
         )
         val pushStillVisible by remember { derivedStateOf { pushProgress.value > 0.001f } }
+
+        LaunchedEffect(isTrashOpen, pushStillVisible) {
+            if (!isTrashOpen && !pushStillVisible && isTrashLockEnabled) {
+                viewModel.lockTrash()
+            }
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -578,11 +632,31 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                         appVersionName = appVersionName,
                                         graphicsQuality = graphicsQuality,
                                         onSetGraphicsQuality = { viewModel.setGraphicsQuality(it) },
+                                        trashLockEnabled = isTrashLockEnabled,
+                                        onToggleTrashLock = onToggleTrashLock,
                                         onOpenFavorites = { isFavoritesOpen = true },
                                         onOpenTrash = { viewModel.openTrash() },
                                         onOpenDuplicates = { viewModel.openDuplicates() },
                                         loadStorageStats = { viewModel.loadStorageStats() },
-                                        onEmptyTrash = { viewModel.emptyTrash() },
+                                        onEmptyTrash = {
+                                            if (isTrashCurrentlyLocked) {
+                                                val fragmentActivity = context.findFragmentActivity()
+                                                if (fragmentActivity != null) {
+                                                    BiometricAuthHelper.authenticate(
+                                                        activity = fragmentActivity,
+                                                        title = strings.unlockTrashTitle,
+                                                        subtitle = strings.unlockTrashSubtitle,
+                                                        onSuccess = {
+                                                            viewModel.unlockTrash()
+                                                            viewModel.emptyTrash()
+                                                        },
+                                                        onError = { _, _ -> }
+                                                    )
+                                                }
+                                            } else {
+                                                viewModel.emptyTrash()
+                                            }
+                                        },
                                         onOpenLibrary = { viewModel.selectTab(GalleryTab.BILDER) },
                                         onBack = { viewModel.selectTab(GalleryTab.BILDER) },
                                         onSettingsPageOpenChanged = { settingsPageOpen = it }
@@ -654,7 +728,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                             viewModel.selectTab(GalleryTab.BILDER)
                         },
                         onTrash = { viewModel.openTrash() },
-                        onSettings = { viewModel.selectTab(GalleryTab.MENU) }
+                        onSettings = { viewModel.selectTab(GalleryTab.MENU) },
+                        trashLockEnabled = isTrashLockEnabled
                     )
                 }
 
@@ -747,6 +822,13 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                         Box(modifier = Modifier.fillMaxSize()) {
                             TrashScreen(
                                 trashedItems = trashedMedia,
+                                isLocked = isTrashCurrentlyLocked,
+                                onUnlockRequest = {
+                                    if (isTrashOpen) {
+                                        requestTrashUnlock()
+                                    }
+                                },
+                                onLockTrash = { viewModel.lockTrash() },
                                 onBack = { viewModel.closeTrash() },
                                 onItemClick = { _, index -> viewModel.openDetail(index, DetailSource.TRASH) },
                                 onRestoreAll = { viewModel.restoreAllTrash() },
@@ -755,7 +837,7 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                             BottomEdgeFade(Modifier.align(Alignment.BottomCenter))
 
                             // A deleted item opens full size too, with only restore / delete permanently / details.
-                            MediaZoomTransition(visible = selectedItemIndex != null && detailSource == DetailSource.TRASH) {
+                            MediaZoomTransition(visible = !isTrashCurrentlyLocked && selectedItemIndex != null && detailSource == DetailSource.TRASH) {
                                 MediaDetailScreen(
                                     mediaList = trashedMedia,
                                     initialIndex = trashDetailIndex[0],

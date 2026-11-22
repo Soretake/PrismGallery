@@ -78,6 +78,7 @@ fun HyperOsIconRow(
     title: String,
     modifier: Modifier = Modifier,
     value: String? = null,
+    trailingIcon: ImageVector? = null,
     horizontalPadding: Dp = 28.dp,
     onClick: (() -> Unit)? = null
 ) {
@@ -116,6 +117,10 @@ fun HyperOsIconRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
+        if (trailingIcon != null) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(trailingIcon, null, tint = palette.textMuted, modifier = Modifier.size(18.dp))
+        }
         if (value != null) {
             Spacer(modifier = Modifier.width(10.dp))
             Text(value, color = palette.textMuted, fontSize = 16.sp, maxLines = 1)

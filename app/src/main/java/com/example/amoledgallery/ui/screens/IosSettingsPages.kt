@@ -77,8 +77,10 @@ internal fun IosSettingsPage(
     sdCardTotalBytes: Long?,
     appVersionName: String,
     trashedCount: Int,
+    trashLockEnabled: Boolean = true,
     graphicsQuality: PerformanceProfile,
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    onToggleTrashLock: (Boolean) -> Unit = {},
     loadStorageStats: suspend () -> MediaRepository.MediaStorageStats?,
     onEmptyTrash: () -> Unit,
     onOpenLibrary: () -> Unit
@@ -101,7 +103,7 @@ internal fun IosSettingsPage(
             ) {
                 when (section) {
                     SettingsSection.DESIGN -> AppearanceContent()
-                    SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality)
+                    SettingsSection.SETTINGS -> GeneralContent(graphicsQuality, onSetGraphicsQuality, trashLockEnabled, onToggleTrashLock)
                     SettingsSection.STORAGE -> StorageContent(
                         internalFreeBytes, internalTotalBytes, sdCardFreeBytes, sdCardTotalBytes,
                         trashedCount, loadStorageStats, onEmptyTrash, onOpenLibrary
@@ -177,9 +179,12 @@ private fun ColumnScope.AppearanceContent() {
 @Composable
 private fun ColumnScope.GeneralContent(
     graphicsQuality: PerformanceProfile,
-    onSetGraphicsQuality: (PerformanceProfile) -> Unit
+    onSetGraphicsQuality: (PerformanceProfile) -> Unit,
+    trashLockEnabled: Boolean = true,
+    onToggleTrashLock: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val palette = LocalAppTheme.current.palette
     IosHeader(strings.language, first = true)
     IosGroup {
         AppLanguage.entries.forEachIndexed { index, appLanguage ->
@@ -199,6 +204,31 @@ private fun ColumnScope.GeneralContent(
         }
     }
     IosFooter(strings.qualityDescription(graphicsQuality))
+
+    IosHeader(strings.lockTrashSetting)
+    IosGroup {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleTrashLock(!trashLockEnabled) }
+                .heightIn(min = 54.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(strings.lockTrashSetting, color = palette.onBackground, fontSize = 17.sp)
+            }
+            androidx.compose.material3.Switch(
+                checked = trashLockEnabled,
+                onCheckedChange = onToggleTrashLock,
+                colors = androidx.compose.material3.SwitchDefaults.colors(
+                    checkedThumbColor = palette.onAccent,
+                    checkedTrackColor = palette.accent
+                )
+            )
+        }
+    }
+    IosFooter(strings.lockTrashSettingSubtitle)
 }
 
 @Composable

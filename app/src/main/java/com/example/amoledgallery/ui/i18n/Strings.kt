@@ -207,6 +207,18 @@ interface AppStrings {
     val trashEmpty: String
     val trashEmptyMessage: String
     val trashInfo: String
+    val trashLocked: String
+    val trashLockedTitle: String
+    val trashLockedDescription: String
+    val unlockTrashAction: String
+    val lockTrashAction: String
+    val unlockTrashTitle: String
+    val unlockTrashSubtitle: String
+    val lockTrashSetting: String
+    val lockTrashSettingSubtitle: String
+    val unlockToDisableLock: String
+    val deviceNotSecured: String
+    val openSecuritySettings: String
     // Duplicates: files that are byte for byte the same.
     val duplicates: String
     val duplicatesSubtitle: String
@@ -544,6 +556,18 @@ object GermanStrings : AppStrings {
     override val trashEmpty = "Papierkorb ist leer"
     override val trashEmptyMessage = "Gelöschte Medien werden hier 30 Tage aufbewahrt."
     override val trashInfo = "Elemente im Papierkorb werden nach 30 Tagen endgültig gelöscht."
+    override val trashLocked = "Gesperrt"
+    override val trashLockedTitle = "Papierkorb ist gesperrt"
+    override val trashLockedDescription = "Mit Gerätesperre oder Biometrie entsperren, um gelöschte Medien anzuzeigen."
+    override val unlockTrashAction = "Entsperren"
+    override val lockTrashAction = "Sperren"
+    override val unlockTrashTitle = "Papierkorb entsperren"
+    override val unlockTrashSubtitle = "Gerätesperre verwenden, um gelöschte Medien anzuzeigen"
+    override val lockTrashSetting = "Papierkorb sperren"
+    override val lockTrashSettingSubtitle = "System-Sperre zum Öffnen des Papierkorbs anfordern"
+    override val unlockToDisableLock = "Bestätigen, um Papierkorb-Sperre zu deaktivieren"
+    override val deviceNotSecured = "Keine Gerätesperre eingerichtet. Richte eine PIN, ein Muster oder Biometrie in den Systemeinstellungen ein."
+    override val openSecuritySettings = "Einstellungen öffnen"
     override val duplicates = "Doppelte Dateien"
     override val duplicatesSubtitle = "Dateien finden, die es mehrfach gibt"
     override val duplicatesScanning = "Dateien werden verglichen …"
@@ -896,6 +920,18 @@ object EnglishStrings : AppStrings {
     override val trashEmpty = "Trash is empty"
     override val trashEmptyMessage = "Deleted media is kept here for 30 days."
     override val trashInfo = "Items in the trash are deleted permanently after 30 days."
+    override val trashLocked = "Locked"
+    override val trashLockedTitle = "Trash is locked"
+    override val trashLockedDescription = "Unlock with your system lock or biometrics to view deleted photos and videos."
+    override val unlockTrashAction = "Unlock"
+    override val lockTrashAction = "Lock"
+    override val unlockTrashTitle = "Unlock Trash"
+    override val unlockTrashSubtitle = "Use your system lock to view deleted media"
+    override val lockTrashSetting = "Lock Trash"
+    override val lockTrashSettingSubtitle = "Require system lock to open trash"
+    override val unlockToDisableLock = "Confirm your identity to turn off Trash lock"
+    override val deviceNotSecured = "No screen lock set on this device. Set a PIN, pattern or biometrics in system settings."
+    override val openSecuritySettings = "Open Settings"
     override val duplicates = "Duplicate files"
     override val duplicatesSubtitle = "Find files you have more than once"
     override val duplicatesScanning = "Comparing files …"
